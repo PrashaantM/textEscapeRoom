@@ -3,6 +3,7 @@ import { sfx } from '../audio.js';
 import { glitchBurst, pulse } from '../fx.js';
 import { el, randInt } from '../utils.js';
 import { terminalFrame, showInterstitial } from './shared.js';
+import { drawDoor, drawPlayer } from '../sprites.js';
 
 const SIZE = 5;
 const AMBIENT_LINES = [
@@ -42,6 +43,18 @@ export default {
     let grid = generate();
     let moves = 0;
 
+    const roomScene = el('div', { class: 'room-scene', 'aria-hidden': 'true' });
+    const doorItem = el('div', { class: 'room-item' });
+    const playerItem = el('div', { class: 'player-sprite' }, [drawPlayer('#ffb000', 6), el('span', {}, 'YOU')]);
+    roomScene.append(playerItem, doorItem);
+
+    function renderRoomScene(justSolved = false) {
+      const solved = isSolved(grid);
+      doorItem.innerHTML = '';
+      doorItem.append(drawDoor(!solved, 8), el('span', {}, solved ? 'WARD DOOR: OPEN' : 'WARD DOOR: SEALED'));
+      if (justSolved) { pulse(doorItem, 'fx-pulse', 700); pulse(playerItem, 'fx-pulse', 700); }
+    }
+
     const frame = terminalFrame({ title: 'SECTOR 2 // BREAKER WARD', accent: '#ffb000' });
     const body = frame.querySelector('.term-body');
 
@@ -56,7 +69,7 @@ export default {
     body.appendChild(gridEl);
     body.appendChild(el('div', { class: 'breaker-controls' }, [resetBtn]));
     body.appendChild(ambient);
-    container.appendChild(el('div', { class: 'level3-scene' }, [frame]));
+    container.appendChild(el('div', { class: 'level3-scene' }, [roomScene, frame]));
 
     function renderHud() {
       hud.innerHTML = '';
@@ -85,7 +98,9 @@ export default {
       sfx.move();
       renderHud();
       renderGrid();
-      if (isSolved(grid)) win();
+      const solved = isSolved(grid);
+      renderRoomScene(solved);
+      if (solved) win();
     }
 
     function reset() {
@@ -94,6 +109,7 @@ export default {
       moves = 0;
       renderHud();
       renderGrid();
+      renderRoomScene();
     }
 
     function win() {
@@ -115,6 +131,7 @@ export default {
 
     renderHud();
     renderGrid();
+    renderRoomScene();
 
     let ambientIdx = 0;
     ambient.textContent = '';

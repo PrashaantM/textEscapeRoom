@@ -1,8 +1,9 @@
 import { completeLevel, getState } from '../state.js';
 import { sfx } from '../audio.js';
-import { shake, glitchBurst } from '../fx.js';
+import { shake, glitchBurst, pulse } from '../fx.js';
 import { el, delay, randInt } from '../utils.js';
 import { terminalFrame, showInterstitial } from './shared.js';
+import { drawPlayer } from '../sprites.js';
 
 const ROUNDS_TO_WIN = 5;
 const PADS = [
@@ -48,10 +49,12 @@ export default {
       el('p', { class: 'arcade-instructions' }, 'Watch the pattern, then repeat it with the arrow keys or by clicking the pads.'),
     ]);
 
+    const playerItem = el('div', { class: 'player-sprite arcade-player' }, [drawPlayer('#ff2fd0', 6), el('span', {}, 'PLAYER 1')]);
+
     body.appendChild(marquee);
     body.appendChild(hud);
     body.appendChild(message);
-    body.appendChild(padGrid);
+    body.appendChild(el('div', { class: 'arcade-floor' }, [playerItem, padGrid]));
     container.appendChild(el('div', { class: 'level2-scene' }, [frame, startOverlay]));
 
     function renderHud() {
@@ -138,7 +141,8 @@ export default {
       message.textContent = 'MISS! WATCH AGAIN...';
       await delay(900);
       if (!alive) return;
-      playSequence(randomSequence(round + 2));
+      sequence = randomSequence(round + 2);
+      playSequence(sequence);
     }
 
     function showContinue() {
@@ -163,6 +167,7 @@ export default {
       phase = 'won';
       sfx.unlock();
       glitchBurst(frame, 400);
+      pulse(playerItem, 'fx-pulse', 700);
       const digit = getState().codeDigits[1];
       completeLevel(1, digit);
       message.textContent = 'HIGH SCORE!';

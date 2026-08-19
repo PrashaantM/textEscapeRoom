@@ -1,9 +1,9 @@
 import { completeLevel, getState, setFlag } from '../state.js';
 import { sfx } from '../audio.js';
-import { shake, glitchBurst } from '../fx.js';
+import { shake, glitchBurst, pulse } from '../fx.js';
 import { el, delay, randInt, sample, shuffle } from '../utils.js';
 import { terminalFrame, showInterstitial } from './shared.js';
-import { drawPadlock } from '../sprites.js';
+import { drawPadlock, drawDoor, drawPlayer } from '../sprites.js';
 
 const WORD_BANK = ['ECHOES', 'ARCADE', 'MEMORY', 'BOOTUP', 'CIPHER', 'GLITCH', 'SHADOW', 'SILENT', 'ENIGMA', 'ORACLE'];
 const NOISE_CHARS = '!@#$%^&*<>{}[]()~/|;:+=01'.split('');
@@ -27,6 +27,11 @@ export default {
     let candidates, passkey, attemptsLeft, guessLog, dudBtn, attemptBtn, wordButtons, alive = true;
     ctx.signal.addEventListener('abort', () => { alive = false; });
 
+    const roomScene = el('div', { class: 'room-scene', 'aria-hidden': 'true' }, [
+      el('div', { class: 'player-sprite' }, [drawPlayer('#00ff9c', 6), el('span', {}, 'YOU')]),
+      el('div', { class: 'room-item' }, [drawDoor(true, 10), el('span', {}, 'VAULT: SEALED')]),
+    ]);
+
     const frame = terminalFrame({ title: 'SECTOR 3 // VAULT BREACH', accent: '#00ff9c' });
     const body = frame.querySelector('.term-body');
     const vaultBadge = el('div', { class: 'vault-badge' }, [drawPadlock('#00ff9c', 7), el('span', {}, 'VAULT: SEALED')]);
@@ -42,7 +47,7 @@ export default {
     body.appendChild(noiseBox);
     body.appendChild(log);
     body.appendChild(lockMsg);
-    container.appendChild(el('div', { class: 'level4-scene' }, [frame]));
+    container.appendChild(el('div', { class: 'level4-scene' }, [roomScene, frame]));
 
     function renderHud() {
       hud.innerHTML = '';
@@ -170,6 +175,11 @@ export default {
       glitchBurst(frame, 400);
       vaultBadge.classList.add('vault-badge--open');
       vaultBadge.querySelector('span').textContent = 'VAULT: OPEN';
+      const doorItem = roomScene.querySelector('.room-item');
+      doorItem.innerHTML = '';
+      doorItem.append(drawDoor(false, 10), el('span', {}, 'VAULT: OPEN'));
+      pulse(doorItem, 'fx-pulse', 700);
+      pulse(roomScene.querySelector('.player-sprite'), 'fx-pulse', 700);
       const digit = getState().codeDigits[3];
       completeLevel(3, digit);
       noiseBox.querySelectorAll('button').forEach((b) => (b.disabled = true));

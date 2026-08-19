@@ -1,7 +1,8 @@
 import { getState, patchState, resetGame, SECTORS } from './state.js';
 import { sfx, setMuted, isMuted } from './audio.js';
-import { setCrtEnabled, glitchBurst } from './fx.js';
+import { setCrtEnabled, glitchBurst, reducedMotion } from './fx.js';
 import { el, qs } from './utils.js';
+import { drawPlayer } from './sprites.js';
 
 import titleScene from './scenes/title.js';
 import callsignScene from './scenes/callsign.js';
@@ -54,14 +55,27 @@ export function goTo(id) {
     id = fallbackScene();
   }
 
+  const app = qs('#app');
+  const swap = () => mountScene(id, app);
+
+  // First load, or reduced-motion: swap immediately, no fade.
+  if (!currentId || reducedMotion()) {
+    swap();
+    return;
+  }
+
+  app.classList.add('scene-out');
+  setTimeout(swap, 160);
+}
+
+function mountScene(id, app) {
   if (currentController) currentController.abort();
   if (typeof currentCleanup === 'function') {
     try { currentCleanup(); } catch (err) { console.error(err); }
   }
 
-  const app = qs('#app');
   app.innerHTML = '';
-  app.className = `scene scene--${id}`;
+  app.className = `scene scene--${id} scene-enter`;
 
   currentId = id;
   patchState({ scene: id });
@@ -74,6 +88,8 @@ export function goTo(id) {
 
   const result = cfg.mod.mount(app, ctx);
   currentCleanup = typeof result === 'function' ? result : null;
+
+  requestAnimationFrame(() => requestAnimationFrame(() => app.classList.remove('scene-enter')));
 }
 
 export function restartCurrent() {
@@ -106,7 +122,7 @@ function renderChrome(show, levelIndex) {
   const sector = SECTORS[levelIndex];
   bar.style.setProperty('--accent', sector.accent);
 
-  const dots = el('div', { class: 'progress-dots', role: 'list', 'aria-label': 'Sector progress' },
+  const dots = el('div', { class: 'progress-dots', style: `--count:${SECTORS.length}`, role: 'list', 'aria-label': 'Sector progress' },
     SECTORS.map((s, i) => el('span', {
       class: 'dot' + (getState().levelsCompleted[i] ? ' dot--done' : i === levelIndex ? ' dot--active' : ''),
       role: 'listitem',
@@ -114,8 +130,17 @@ function renderChrome(show, levelIndex) {
     }))
   );
 
+  const playerMarker = el('div', {
+    class: 'progress-player',
+    style: `--count:${SECTORS.length}; --pos:${levelIndex}`,
+    'aria-hidden': 'true',
+  }, [drawPlayer(sector.accent, 2)]);
+
+  const track = el('div', { class: 'progress-wrap' }, [playerMarker, dots]);
+
   const label = el('div', { class: 'sector-label' }, [
     el('span', { class: 'sector-name' }, sector.name),
+    el('span', { class: 'sector-step' }, `STEP ${levelIndex + 1} OF ${SECTORS.length}`),
     el('span', { class: 'sector-title' }, sector.title),
   ]);
 
@@ -135,7 +160,7 @@ function renderChrome(show, levelIndex) {
   ]);
 
   bar.appendChild(label);
-  bar.appendChild(dots);
+  bar.appendChild(track);
   bar.appendChild(controls);
 }
 

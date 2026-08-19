@@ -79,6 +79,15 @@ a { color: var(--accent); }
   align-items: center;
   padding: 1.25rem 1rem 3rem;
   position: relative;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+#app.scene-out { opacity: 0; transform: translateY(-8px); }
+#app.scene-enter { opacity: 0; transform: translateY(8px); }
+
+@media (prefers-reduced-motion: reduce) {
+  #app { transition: none; }
 }
 
 /* ---- CRT / scanline overlay ---- */
@@ -175,13 +184,35 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 
 .sector-label { display: flex; flex-direction: column; font-family: var(--font-display); font-size: 0.55rem; line-height: 1.6; white-space: nowrap; }
 .sector-label .sector-name { color: var(--accent); }
+.sector-label .sector-step { color: var(--fg-dim); font-size: 0.42rem; letter-spacing: 0.04em; }
 .sector-label .sector-title { color: var(--fg-dim); font-size: 0.5rem; }
 
-.progress-dots { display: flex; gap: 0.4rem; }
-.progress-dots .dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--fg-dim); background: transparent; }
+/* "you are here": a tiny player sprite riding above the active sector dot */
+.progress-wrap { position: relative; padding-top: 26px; }
+.progress-dots { display: grid; grid-template-columns: repeat(var(--count, 5), 1fr); gap: 0.4rem; }
+.progress-dots .dot { justify-self: center; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--fg-dim); background: transparent; }
 .progress-dots .dot--active { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 8px var(--accent); }
 .progress-dots .dot--done { border-color: var(--accent); background: var(--bg-panel); }
 .progress-dots .dot--done::after { content: ''; }
+
+.progress-player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 26px;
+  display: grid;
+  grid-template-columns: repeat(var(--count, 5), 1fr);
+  pointer-events: none;
+}
+.progress-player canvas {
+  grid-column: calc(var(--pos, 0) + 1);
+  justify-self: center;
+  align-self: end;
+  image-rendering: pixelated;
+  animation: playerBob 1.6s ease-in-out infinite;
+  filter: drop-shadow(0 0 3px var(--accent));
+}
 
 .chrome-controls { display: flex; gap: 0.5rem; }
 .icon-btn {
@@ -346,6 +377,20 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
 }
+@keyframes playerBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-player canvas { animation: none; }
+}
+
+/* the player character, dropped into a scene near whatever is relevant right now */
+.player-sprite { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; font-family: var(--font-display); font-size: 0.5rem; color: var(--fg-dim); }
+.player-sprite canvas { animation: playerBob 2.2s ease-in-out infinite; filter: drop-shadow(0 0 5px var(--accent)); }
+@media (prefers-reduced-motion: reduce) {
+  .player-sprite canvas { animation: none; }
+}
 .title-floppy { position: absolute; top: 1.2rem; left: 1.2rem; opacity: 0.85; }
 
 .title-menu { display: flex; flex-direction: column; gap: 0.6rem; width: min(100%, 340px); margin-top: 0.5rem; }
@@ -448,6 +493,44 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .room-item--acquired { color: var(--accent); }
 .room-item--acquired canvas { filter: drop-shadow(0 0 10px rgba(57, 255, 20, 0.7)); }
 
+/* clickable room objects: this is how you actually interact with the room */
+.room-item-btn {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 0.35rem;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.08s ease;
+}
+.room-item-btn:hover, .room-item-btn:focus-visible {
+  border-color: var(--accent);
+  background: rgba(57, 255, 20, 0.08);
+}
+.room-item-btn:active { transform: scale(0.96); }
+
+.door-pad {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+}
+.door-pad-label { font-family: var(--font-display); font-size: 0.55rem; color: var(--accent); margin: 0; }
+.door-pad-slots { display: flex; gap: 0.5rem; }
+.door-pad-slot {
+  width: 32px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 1.1rem;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  color: var(--accent);
+}
+.door-pad-numpad { display: grid; grid-template-columns: repeat(5, 40px); gap: 0.35rem; }
+.door-pad-numpad .numpad-btn:hover { border-color: var(--accent); color: var(--accent); }
+.door-pad-actions { display: flex; gap: 0.6rem; margin-top: 0.2rem; }
+.door-pad-actions .cta-btn { padding: 0.5rem 1rem; font-size: 0.65rem; }
+
 /* clickable command chips: what you'd otherwise have to type */
 .quick-commands { display: flex; flex-wrap: wrap; gap: 0.5rem; padding-top: 0.4rem; border-top: 1px dashed var(--border); }
 .cmd-chip {
@@ -482,6 +565,8 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .arcade-hud { display: flex; justify-content: space-between; font-size: 1.2rem; color: var(--fg-dim); }
 .lives { color: #ff4d5e; letter-spacing: 0.15em; }
 .arcade-message { text-align: center; font-family: var(--font-display); font-size: 0.7rem; min-height: 1.4em; color: var(--fg); }
+.arcade-floor { display: flex; align-items: center; justify-content: center; gap: 1.5rem; }
+.arcade-player canvas { filter: drop-shadow(0 0 5px #ff2fd0); }
 .pad-grid {
   display: grid;
   grid-template-columns: repeat(3, 84px);
@@ -498,6 +583,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   background: color-mix(in srgb, var(--pad-color, #fff) 12%, #0c1116);
   transition: transform 0.05s ease;
 }
+.pad:hover:not(.lit) { filter: brightness(1.25); box-shadow: 0 0 12px var(--pad-color); }
 .pad:active { transform: scale(0.94); }
 .pad.lit { background: var(--pad-color); color: #05070a; box-shadow: 0 0 24px var(--pad-color); }
 .pad-up { grid-column: 2; grid-row: 1; }
@@ -537,9 +623,10 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   justify-content: center;
   margin: 0.5rem auto;
 }
-.cell { border-radius: 3px; border: 2px solid #4a3200; }
+.cell { border-radius: 3px; border: 2px solid #4a3200; transition: filter 0.1s ease, box-shadow 0.1s ease; }
 .cell--off { background: #1a1508; }
 .cell--on { background: #ffb000; box-shadow: 0 0 14px #ffb000; border-color: #ffb000; }
+.cell:hover { filter: brightness(1.3); box-shadow: 0 0 10px rgba(255, 176, 0, 0.45); }
 .breaker-controls { display: flex; justify-content: center; }
 .ambient-line { text-align: center; color: var(--fg-dim); font-style: italic; min-height: 1.4em; font-size: 1.05rem; }
 
@@ -599,6 +686,8 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .shard-case { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
 .shard-slot { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; font-size: 0.95rem; color: var(--fg-dim); }
 .core-clue { text-align: center; color: #ffd166; font-style: italic; }
+.core-console { display: flex; align-items: center; justify-content: center; gap: 1.25rem; }
+.core-player canvas { filter: drop-shadow(0 0 5px #b967ff); }
 .keypad-slots { display: flex; gap: 0.6rem; justify-content: center; }
 .keypad-slot {
   width: 56px; height: 64px;
@@ -609,6 +698,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   color: var(--fg);
   border-radius: 4px;
 }
+.keypad-slot:hover { border-color: #7c4fa8; }
 .keypad-slot.active { border-color: #b967ff; color: #b967ff; box-shadow: 0 0 12px #b967ff; }
 .numpad { display: grid; grid-template-columns: repeat(5, 44px); gap: 0.4rem; justify-content: center; }
 .numpad-btn { padding: 0.5rem 0; border: 2px solid var(--border); border-radius: 3px; background: var(--bg-panel-2); font-size: 1.1rem; }
@@ -697,6 +787,6 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   .keypad-slot { width: 44px; height: 54px; font-size: 1.1rem; }
   #statusbar { flex-wrap: wrap; }
   .sector-label { order: 1; }
-  .progress-dots { order: 3; width: 100%; justify-content: center; }
+  .progress-wrap { order: 3; width: 100%; }
   .chrome-controls { order: 2; }
 }

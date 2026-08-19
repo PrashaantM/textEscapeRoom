@@ -123,6 +123,27 @@ export function drawTerminal(unit = 8, className = 'sprite sprite-terminal') {
   return canvas;
 }
 
+export function drawPlayer(accent = '#39ff14', unit = 8, className = 'sprite sprite-player') {
+  const { canvas, ctx } = makeCanvas(10, 16, unit, className);
+  const b = grid(ctx, unit);
+  const suit = '#2b3a45';
+  const suitDark = '#1c262e';
+  const skin = '#e8c9a0';
+  const boot = '#0a0e12';
+  b(3, 0, 4, 3, skin);
+  b(3, 1, 4, 1, accent); // visor band, tinted per sector
+  b(2, 3, 6, 6, suit);
+  b(2, 3, 6, 1, suitDark);
+  b(4, 5, 2, 2, accent); // chest light
+  b(1, 4, 1, 4, suit);
+  b(8, 4, 1, 4, suit);
+  b(3, 9, 2, 5, suitDark);
+  b(5, 9, 2, 5, suitDark);
+  b(2, 14, 3, 2, boot);
+  b(5, 14, 3, 2, boot);
+  return canvas;
+}
+
 export function drawPadlock(accent = '#00ff9c', unit = 8, className = 'sprite sprite-padlock') {
   const { canvas, ctx } = makeCanvas(12, 12, unit, className);
   const b = grid(ctx, unit);

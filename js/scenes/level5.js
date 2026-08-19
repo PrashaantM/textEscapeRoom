@@ -3,7 +3,7 @@ import { sfx } from '../audio.js';
 import { shake, glitchBurst, pulse } from '../fx.js';
 import { el, clamp } from '../utils.js';
 import { terminalFrame, asciiPre, showInterstitial } from './shared.js';
-import { drawShard } from '../sprites.js';
+import { drawShard, drawPlayer } from '../sprites.js';
 import { CORE_RING } from '../asciiArt.js';
 
 const ROMAN = ['I', 'II', 'III', 'IV'];
@@ -43,11 +43,12 @@ export default {
 
     const status = el('p', { class: 'core-status', 'aria-live': 'polite' });
     const submitBtn = el('button', { class: 'cta-btn', onclick: () => submit() }, 'OVERRIDE ▶');
+    const playerItem = el('div', { class: 'player-sprite core-player' }, [drawPlayer('#b967ff', 6), el('span', {}, 'YOU')]);
 
     body.appendChild(core);
     body.appendChild(shardCase);
     body.appendChild(clue);
-    body.appendChild(keypad);
+    body.appendChild(el('div', { class: 'core-console' }, [playerItem, keypad]));
     body.appendChild(numpad);
     body.appendChild(status);
     body.appendChild(submitBtn);
@@ -96,6 +97,7 @@ export default {
       sfx.unlock();
       glitchBurst(frame, 600);
       pulse(core, 'fx-pulse', 900);
+      pulse(playerItem, 'fx-pulse', 900);
       core.classList.add('core-stable');
       status.textContent = 'CORE ACCESS GRANTED';
       completeLevel(4);
