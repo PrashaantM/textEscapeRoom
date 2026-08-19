@@ -112,20 +112,34 @@ export default {
       return n;
     }
 
+    function renderGuessRow(word, isWin) {
+      const letters = [];
+      for (let i = 0; i < word.length; i++) {
+        const hit = word[i] === passkey[i];
+        letters.push(el('span', { class: hit ? 'vault-letter-hit' : 'vault-letter-miss' }, word[i]));
+      }
+      const row = el('p', { class: `vault-log-line ${isWin ? 'vault-hit' : ''}`.trim() }, [
+        '> ',
+        ...letters,
+        ` :: ${matchCount(word)}/6 CORRECT`,
+      ]);
+      log.appendChild(row);
+      log.scrollTop = log.scrollHeight;
+    }
+
     async function guessWord(word, btn) {
       if (!alive || btn.classList.contains('used') || attemptsLeft <= 0) return;
       btn.classList.add('used');
       btn.disabled = true;
-      const matches = matchCount(word);
       attemptsLeft--;
       renderHud();
       sfx.select();
       if (word === passkey) {
-        logLine(`> ${word} :: 6/6 CORRECT`, 'vault-hit');
+        renderGuessRow(word, true);
         win();
         return;
       }
-      logLine(`> ${word} :: ${matches}/6 CORRECT`);
+      renderGuessRow(word, false);
       sfx.error();
       shake(noiseBox);
       if (attemptsLeft <= 0) {
