@@ -1,21 +1,21 @@
 import { completeLevel, getState } from '../state.js';
 import { sfx } from '../audio.js';
-import { shake } from '../fx.js';
+import { shake, pulse } from '../fx.js';
 import { el, delay } from '../utils.js';
 import { terminalFrame, typeInto, showInterstitial } from './shared.js';
+import { drawDoor, drawDrawer, drawTerminal, drawKeycard } from '../sprites.js';
 
 const ROOM_DESC = "You're wedged into a server closet that smells of hot dust. A dead terminal hums awake. To your left: a steel door with a 3-digit keypad. Under the desk: a battered drawer. Taped to the monitor: a folder marked SECTOR LOGS.";
-const HELP_LINES = [
-  'AVAILABLE COMMANDS:',
-  '  look                just look around the room',
-  '  ls / ls -a          list files (add -a to reveal hidden ones)',
-  '  cat <file>          read a file',
-  '  open drawer         open the desk drawer',
-  '  take keycard        pick something up',
-  '  inventory           check what you are carrying',
-  '  unlock door <code>  try the keypad',
-  '  hint                nudge yourself in the right direction',
-  '  clear               wipe the screen',
+
+const HELP_ROWS = [
+  ['look', 'just look around the room'],
+  ['ls -a', 'list files (reveals hidden ones too)'],
+  ['cat <file>', 'read a file'],
+  ['open drawer', 'open the desk drawer'],
+  ['take keycard', 'pick something up'],
+  ['inventory', 'check what you are carrying'],
+  ['unlock door <code>', 'try the keypad'],
+  ['hint', 'nudge yourself in the right direction'],
 ];
 
 function normalizeFile(s) {
@@ -29,8 +29,30 @@ export default {
     const history = [];
     let historyIdx = -1;
 
+    // ---- pixel-art room scene: a live visual readout of the puzzle state ----
+    const roomScene = el('div', { class: 'room-scene', 'aria-hidden': 'true' });
+    let lastKeycardShown = false;
+
+    function renderRoomScene() {
+      roomScene.innerHTML = '';
+      const doorItem = el('div', { class: 'room-item' }, [drawDoor(!flags.doorUnlocked, 8), el('span', {}, flags.doorUnlocked ? 'DOOR: OPEN' : 'DOOR: LOCKED')]);
+      const deskItem = el('div', { class: 'room-item' }, [drawDrawer(flags.openedDrawer, 8), el('span', {}, flags.openedDrawer ? 'DESK: OPEN' : 'DESK: SHUT')]);
+      const termItem = el('div', { class: 'room-item' }, [drawTerminal(8), el('span', {}, 'TERMINAL')]);
+      roomScene.append(termItem, deskItem, doorItem);
+      if (flags.hasKeycard) {
+        const cardItem = el('div', { class: 'room-item room-item--acquired' }, [drawKeycard('#39ff14', 8), el('span', {}, 'KEYCARD')]);
+        roomScene.appendChild(cardItem);
+        if (!lastKeycardShown) pulse(cardItem, 'fx-pulse', 700);
+      }
+      lastKeycardShown = flags.hasKeycard;
+      if (flags.doorUnlocked) pulse(doorItem, 'fx-pulse', 700);
+    }
+
     const frame = terminalFrame({ title: 'SECTOR 0 // BOOT-UP :: root@echo:~$', accent: '#39ff14' });
     const log = el('div', { class: 'term-log', id: 'l1-log', role: 'log', 'aria-live': 'polite' });
+
+    // ---- quick-command chips: tap instead of typing ----
+    const quickBar = el('div', { class: 'quick-commands', role: 'group', 'aria-label': 'Quick commands' });
     const inputRow = el('div', { class: 'term-input-row' }, [
       el('span', { class: 'term-prompt' }, '>'),
       el('input', {
@@ -41,9 +63,11 @@ export default {
         'aria-label': 'Terminal command input',
       }),
     ]);
-    frame.querySelector('.term-body').appendChild(log);
-    frame.querySelector('.term-body').appendChild(inputRow);
-    container.appendChild(el('div', { class: 'level1-scene' }, [frame]));
+    const body = frame.querySelector('.term-body');
+    body.appendChild(log);
+    body.appendChild(quickBar);
+    body.appendChild(inputRow);
+    container.appendChild(el('div', { class: 'level1-scene' }, [roomScene, frame]));
 
     const input = inputRow.querySelector('input');
 
@@ -58,20 +82,56 @@ export default {
       for (const line of lines) await printRaw(line, cls);
     }
 
-    function hintLine() {
-      if (!flags.lookedAround) return "HINT: try `look`.";
-      if (!flags.sawReadme) return 'HINT: there is a readme file nearby. Try `cat readme.txt`.';
-      if (!flags.sawHiddenList) return 'HINT: not everything shows up in a normal listing. Try `ls -a`.';
-      if (!flags.sawAccessCode) return 'HINT: you spotted a hidden file. Try `cat .access_code`.';
-      if (!flags.openedDrawer) return 'HINT: that drawer looks worth checking. Try `open drawer`.';
-      if (!flags.hasKeycard) return 'HINT: try `take keycard`.';
-      return 'HINT: you have the code and the keycard. Try `unlock door 739`.';
+    function cmdChip(cmd, label) {
+      return el('button', {
+        class: 'cmd-chip',
+        onclick: () => submitCommand(cmd),
+      }, label || cmd);
+    }
+
+    function printNode(node) {
+      log.appendChild(node);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function printHelp() {
+      printRaw('AVAILABLE COMMANDS:');
+      const table = el('div', { class: 'help-table' },
+        HELP_ROWS.map(([cmd, desc]) => el('div', { class: 'help-row' }, [
+          cmdChip(cmd),
+          el('span', { class: 'help-desc' }, desc),
+        ]))
+      );
+      printNode(table);
+    }
+
+    function printFileList(files) {
+      const row = el('div', { class: 'help-row file-row' },
+        files.map((f) => cmdChip(`cat ${f}`, f))
+      );
+      printNode(row);
+    }
+
+    function hintInfo() {
+      if (!flags.lookedAround) return { text: 'HINT: try', cmd: 'look' };
+      if (!flags.sawReadme) return { text: 'HINT: there is a readme file nearby. Try', cmd: 'cat readme.txt' };
+      if (!flags.sawHiddenList) return { text: 'HINT: not everything shows up in a normal listing. Try', cmd: 'ls -a' };
+      if (!flags.sawAccessCode) return { text: 'HINT: you spotted a hidden file. Try', cmd: 'cat .access_code' };
+      if (!flags.openedDrawer) return { text: 'HINT: that drawer looks worth checking. Try', cmd: 'open drawer' };
+      if (!flags.hasKeycard) return { text: 'HINT: try', cmd: 'take keycard' };
+      return { text: 'HINT: you have the code and the keycard. Try', cmd: 'unlock door 739' };
+    }
+
+    function printHint() {
+      const { text, cmd } = hintInfo();
+      printNode(el('p', { class: 'term-line term-hint' }, [`${text}: `, cmdChip(cmd)]));
     }
 
     async function onDoorSolved() {
       flags.doorUnlocked = true;
       await printLines(['The keypad flashes green. Bolts retract with a heavy CLUNK.', 'The steel door slides open onto darkness, and a set of stairs down.'], 'term-success');
       sfx.unlock();
+      renderRoomScene();
       const digit = getState().codeDigits[0];
       completeLevel(0, digit);
       await delay(500);
@@ -109,13 +169,13 @@ export default {
       const [verb, ...restParts] = cmd.split(' ');
       const args = restParts.join(' ');
 
-      if (['help', 'h', '?'].includes(verb)) return printLines(HELP_LINES);
+      if (['help', 'h', '?'].includes(verb)) return printHelp();
       if (['look', 'l'].includes(verb)) { flags.lookedAround = true; return printRaw(ROOM_DESC); }
       if (verb === 'ls' && /(-a|a)$/.test(args)) {
         flags.sawHiddenList = true;
-        return printRaw('readme.txt   sector.log   .access_code');
+        return printFileList(['readme.txt', 'sector.log', '.access_code']);
       }
-      if (verb === 'ls') return printRaw('readme.txt   sector.log');
+      if (verb === 'ls') return printFileList(['readme.txt', 'sector.log']);
       if (verb === 'cat') {
         const file = normalizeFile(args);
         if (file === 'readme.txt') {
@@ -135,6 +195,7 @@ export default {
       if (verb === 'open' && args.includes('drawer')) {
         if (flags.openedDrawer) return printRaw(flags.hasKeycard ? 'The drawer is open and empty.' : 'The drawer is already open. The keycard is still there.');
         flags.openedDrawer = true;
+        renderRoomScene();
         return printRaw('The drawer sticks, then gives way with a groan. Inside: a keycard, still faintly warm.');
       }
       if (['take', 'get', 'grab'].includes(verb) && (args.includes('keycard') || args.includes('card'))) {
@@ -143,6 +204,7 @@ export default {
         flags.hasKeycard = true;
         inventory.push('Keycard');
         sfx.select();
+        renderRoomScene();
         return printRaw('KEYCARD acquired.', 'term-success');
       }
       if (['inventory', 'inv', 'i'].includes(verb)) {
@@ -154,19 +216,24 @@ export default {
       if (verb === 'use' && args.includes('keycard')) {
         return printRaw(flags.hasKeycard ? 'The keypad blinks, waiting for a code.' : "You don't have a keycard to use.");
       }
-      if (verb === 'hint') return printRaw(hintLine(), 'term-hint');
+      if (verb === 'hint') return printHint();
       return printRaw(`SECTOR 0: command not recognized. Type 'help'.`, 'term-error');
+    }
+
+    function submitCommand(val) {
+      if (!val.trim()) return;
+      printRaw(`> ${val}`, 'term-echo');
+      history.push(val);
+      historyIdx = history.length;
+      run(val);
+      input.focus();
     }
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const val = input.value;
-        if (!val.trim()) return;
-        printRaw(`> ${val}`, 'term-echo');
-        history.push(val);
-        historyIdx = history.length;
         input.value = '';
-        run(val);
+        submitCommand(val);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         if (historyIdx > 0) { historyIdx--; input.value = history[historyIdx]; }
@@ -177,7 +244,18 @@ export default {
       }
     }, { signal: ctx.signal });
 
+    quickBar.append(
+      cmdChip('look', 'LOOK'),
+      cmdChip('ls -a', 'LS -A'),
+      cmdChip('open drawer', 'OPEN DRAWER'),
+      cmdChip('take keycard', 'TAKE KEYCARD'),
+      cmdChip('inventory', 'INVENTORY'),
+      cmdChip('hint', 'HINT'),
+    );
+
     container.addEventListener('click', () => input.focus(), { signal: ctx.signal });
-    printLines(['TERMINAL READY.', "Type `help` if you're lost, `look` if you're curious."]).then(() => input.focus());
+
+    renderRoomScene();
+    printLines(['TERMINAL READY.', 'Type a command below, or tap one of the buttons to try it.']).then(() => input.focus());
   },
 };

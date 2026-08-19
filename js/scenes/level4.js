@@ -3,6 +3,7 @@ import { sfx } from '../audio.js';
 import { shake, glitchBurst } from '../fx.js';
 import { el, delay, randInt, sample, shuffle } from '../utils.js';
 import { terminalFrame, showInterstitial } from './shared.js';
+import { drawPadlock } from '../sprites.js';
 
 const WORD_BANK = ['ECHOES', 'ARCADE', 'MEMORY', 'BOOTUP', 'CIPHER', 'GLITCH', 'SHADOW', 'SILENT', 'ENIGMA', 'ORACLE'];
 const NOISE_CHARS = '!@#$%^&*<>{}[]()~/|;:+=01'.split('');
@@ -28,12 +29,14 @@ export default {
 
     const frame = terminalFrame({ title: 'SECTOR 3 // VAULT BREACH', accent: '#00ff9c' });
     const body = frame.querySelector('.term-body');
+    const vaultBadge = el('div', { class: 'vault-badge' }, [drawPadlock('#00ff9c', 7), el('span', {}, 'VAULT: SEALED')]);
     const intro = el('p', { class: 'level-intro' }, `Find the ${'█'.repeat(6)}-length passkey. Each guess reports how many letters are correct AND in position. Watch for bracket pairs hiding in the noise.`);
     const hud = el('div', { class: 'vault-hud' });
     const noiseBox = el('div', { class: 'vault-noise', role: 'group', 'aria-label': 'Terminal noise' });
     const log = el('div', { class: 'vault-log', role: 'log', 'aria-live': 'polite' });
     const lockMsg = el('p', { class: 'vault-lock-msg' });
 
+    body.appendChild(vaultBadge);
     body.appendChild(intro);
     body.appendChild(hud);
     body.appendChild(noiseBox);
@@ -165,6 +168,8 @@ export default {
     function win() {
       sfx.unlock();
       glitchBurst(frame, 400);
+      vaultBadge.classList.add('vault-badge--open');
+      vaultBadge.querySelector('span').textContent = 'VAULT: OPEN';
       const digit = getState().codeDigits[3];
       completeLevel(3, digit);
       noiseBox.querySelectorAll('button').forEach((b) => (b.disabled = true));

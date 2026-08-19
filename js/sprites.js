@@ -82,6 +82,47 @@ export function drawKeycard(accent = '#39ff14', unit = 8, className = 'sprite sp
   return canvas;
 }
 
+export function drawDoor(locked = true, unit = 8, className = 'sprite sprite-door') {
+  const { canvas, ctx } = makeCanvas(12, 14, unit, className);
+  const b = grid(ctx, unit);
+  const frame = '#3a4750';
+  const panel = locked ? '#241a1a' : '#16241c';
+  const glow = locked ? '#ff4d5e' : '#39ff14';
+  b(0, 0, 12, 14, frame);
+  b(1, 1, 10, 12, panel);
+  b(6, 1, 1, 12, frame); // seam down the middle
+  b(8, 6, 2, 3, '#0a0e12'); // keypad housing
+  b(8, 7, 1, 1, glow); // status light
+  return canvas;
+}
+
+export function drawDrawer(open = false, unit = 8, className = 'sprite sprite-drawer') {
+  const { canvas, ctx } = makeCanvas(14, 10, unit, className);
+  const b = grid(ctx, unit);
+  const wood = '#5a4632';
+  const woodDark = '#3d2f20';
+  b(0, 0, 14, 4, wood);
+  b(1, 4, 12, 6, woodDark);
+  if (open) {
+    b(1, 4, 12, 2, '#100a05');
+    b(5, 2, 4, 2, '#39ff14');
+  } else {
+    b(5, 6, 4, 1, '#8a7355');
+  }
+  return canvas;
+}
+
+export function drawTerminal(unit = 8, className = 'sprite sprite-terminal') {
+  const { canvas, ctx } = makeCanvas(12, 10, unit, className);
+  const b = grid(ctx, unit);
+  b(0, 0, 12, 9, '#20303d');
+  b(1, 1, 10, 6, '#0a0e12');
+  b(2, 2, 6, 1, '#39ff14');
+  b(2, 4, 4, 1, '#39ff14');
+  b(4, 9, 4, 1, '#3a4750');
+  return canvas;
+}
+
 export function drawPadlock(accent = '#00ff9c', unit = 8, className = 'sprite sprite-padlock') {
   const { canvas, ctx } = makeCanvas(12, 12, unit, className);
   const b = grid(ctx, unit);
