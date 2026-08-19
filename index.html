@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ECHO.EXE — a browser escape room</title>
+  <meta name="description" content="ECHO.EXE: a nostalgic 5-sector browser escape room. Boot an old machine, crack a vault, restore the power, and free what's trapped inside." />
+  <meta name="theme-color" content="#05070a" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="crt-overlay" aria-hidden="true"></div>
+  <div id="screen-flash" aria-hidden="true"></div>
+
+  <header id="statusbar" hidden></header>
+
+  <main id="app" role="main" aria-live="polite"></main>
+
+  <div id="pause-menu" hidden></div>
+  <div id="konami-toast" role="status" aria-live="polite"></div>
+
+  <noscript>
+    <p style="color:#d8f6e8;background:#05070a;padding:2rem;font-family:monospace;">
+      ECHO.EXE needs JavaScript to boot. Please enable it to play.
+    </p>
+  </noscript>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
