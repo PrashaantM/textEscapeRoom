@@ -1,3 +1,8 @@
+// Scene: the main title/menu screen, the first scene a new player sees
+// (and the one sceneManager.js falls back to when nothing else applies).
+// Offers Continue (if a save exists), New/Start Game, and Erase Data.
+// Starting a new game resets state.js and routes to the callsign scene.
+
 import { getState, resetGame, hasSave } from '../state.js';
 import { sfx } from '../audio.js';
 import { el } from '../utils.js';
@@ -5,6 +10,9 @@ import { asciiPre } from './shared.js';
 import { drawGhost, drawFloppy } from '../sprites.js';
 import { TITLE_LOGO } from '../asciiArt.js';
 
+// Starts a new game: confirms with the player if a save would be
+// overwritten, then resets state.js and navigates to the callsign scene.
+// Called by the "NEW GAME"/"START GAME" menu item.
 function newGame(ctx) {
   const proceed = () => {
     resetGame();
@@ -17,11 +25,15 @@ function newGame(ctx) {
   }
 }
 
+// Resumes the game at whatever scene was last saved in state.js (falling
+// back to callsign). Called by the "CONTINUE" menu item.
 function continueGame(ctx) {
   const state = getState();
   ctx.goTo(state.scene && state.scene !== 'title' ? state.scene : 'callsign');
 }
 
+// Confirms with the player, then wipes their save via state.js and stays on
+// the title scene. Called by the "ERASE DATA" menu item.
 function eraseData(ctx) {
   if (confirm('Erase all saved progress? This cannot be undone.')) {
     resetGame();
@@ -30,6 +42,10 @@ function eraseData(ctx) {
 }
 
 export default {
+  // Scene lifecycle entry point, called by sceneManager.js's mountScene()
+  // when this scene becomes active. Builds the menu (items vary based on
+  // whether a save exists), wires arrow-key navigation, and renders the
+  // logo/ghost/floppy art.
   mount(container, ctx) {
     const save = hasSave();
     const items = [];
@@ -50,6 +66,8 @@ export default {
       return btn;
     });
 
+    // Updates which menu button shows the "selected" highlight, and
+    // optionally plays a move sound. Called on focus and arrow-key nav.
     function renderSelection(playSound) {
       buttons.forEach((b, i) => b.classList.toggle('selected', i === selected));
       if (playSound) sfx.move();

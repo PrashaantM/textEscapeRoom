@@ -1,3 +1,8 @@
+// Scene: Sector 2, "BREAKER WARD". A Lights Out style puzzle on a 5x5 grid:
+// toggling a breaker also toggles its orthogonal neighbors, and the goal is
+// to get every cell powered on. Solving it awards the third memory shard
+// via completeLevel(2, digit) and routes to level4.
+
 import { completeLevel, getState } from '../state.js';
 import { sfx } from '../audio.js';
 import { glitchBurst, pulse } from '../fx.js';
@@ -13,10 +18,15 @@ const AMBIENT_LINES = [
   '...ECHO: "Almost there. Keep the current moving."...',
 ];
 
+// Creates a SIZE x SIZE grid filled with `value`. Called by generate() to
+// build the starting all-on grid before scrambling it.
 function emptyGrid(value) {
   return Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => value));
 }
 
+// Flips the breaker at (r, c) and its up/down/left/right neighbors in
+// place. Called by generate() to scramble the puzzle and by press() when
+// the player clicks a cell.
 function toggle(grid, r, c) {
   const hits = [[r, c], [r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]];
   for (const [y, x] of hits) {
@@ -24,10 +34,15 @@ function toggle(grid, r, c) {
   }
 }
 
+// Reports whether every cell in the grid is powered on. Called after every
+// toggle to check for a win, and by generate() to avoid scrambling into an
+// already-solved state.
 function isSolved(grid) {
   return grid.every((row) => row.every((cell) => cell === true));
 }
 
+// Builds a scrambled, guaranteed-unsolved starting grid by toggling random
+// cells from a fully-lit grid. Called on mount and by the reset button.
 function generate() {
   let grid;
   do {
@@ -39,6 +54,9 @@ function generate() {
 }
 
 export default {
+  // Scene lifecycle entry point, called by sceneManager.js's mountScene()
+  // when this scene becomes active. Builds the breaker grid UI and room
+  // diorama, and starts a periodic ambient-flavor-text timer.
   mount(container, ctx) {
     let grid = generate();
     let moves = 0;
@@ -48,6 +66,8 @@ export default {
     const playerItem = el('div', { class: 'player-sprite' }, [drawPlayer('#ffb000', 6), el('span', {}, 'YOU')]);
     roomScene.append(playerItem, doorItem);
 
+    // Redraws the ward door sprite as sealed or open based on grid state.
+    // Called after every press() and on mount.
     function renderRoomScene(justSolved = false) {
       const solved = isSolved(grid);
       doorItem.innerHTML = '';
@@ -71,12 +91,16 @@ export default {
     body.appendChild(ambient);
     container.appendChild(el('div', { class: 'level3-scene' }, [roomScene, frame]));
 
+    // Redraws the move counter and powered-cell count. Called after every
+    // press() and reset().
     function renderHud() {
       hud.innerHTML = '';
       hud.appendChild(el('span', {}, `MOVES: ${moves}`));
       hud.appendChild(el('span', {}, `POWERED: ${grid.flat().filter(Boolean).length} / ${SIZE * SIZE}`));
     }
 
+    // Rebuilds the clickable breaker grid buttons from the current grid
+    // state. Called after every press() and reset().
     function renderGrid() {
       gridEl.innerHTML = '';
       for (let r = 0; r < SIZE; r++) {
@@ -92,6 +116,9 @@ export default {
       }
     }
 
+    // Handles a breaker click: toggles it and its neighbors, re-renders the
+    // HUD/grid/room, and triggers win() if the grid is now fully powered.
+    // Called by each breaker cell's onclick.
     function press(r, c) {
       toggle(grid, r, c);
       moves++;
@@ -103,6 +130,8 @@ export default {
       if (solved) win();
     }
 
+    // Regenerates a fresh scrambled grid and resets the move counter.
+    // Called by the "RESET PANEL" button.
     function reset() {
       sfx.select();
       grid = generate();
@@ -112,6 +141,10 @@ export default {
       renderRoomScene();
     }
 
+    // Handles solving the breaker puzzle: plays effects, marks the level
+    // complete in state.js with the third shard digit, and shows the
+    // sector-cleared interstitial routing to level4. Called by press() once
+    // isSolved(grid) is true.
     function win() {
       sfx.unlock();
       glitchBurst(frame, 350);

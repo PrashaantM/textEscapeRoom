@@ -1,3 +1,8 @@
+// Large ASCII-art text blocks rendered with scenes/shared.js's asciiPre().
+// TITLE_LOGO is shown on title.js and again (restored/glowing) at the end
+// of ending.js; THE_END appears in ending.js's credits; CORE_RING is the
+// Sector 4 vault graphic in level5.js.
+
 export const TITLE_LOGO = `███████╗ ██████╗██╗  ██╗ ██████╗    ███████╗██╗  ██╗███████╗
 ██╔════╝██╔════╝██║  ██║██╔═══██╗   ██╔════╝╚██╗██╔╝██╔════╝
 █████╗  ██║     ███████║██║   ██║   █████╗   ╚███╔╝ █████╗

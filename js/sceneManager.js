@@ -1,3 +1,15 @@
+// The game's router. This module owns which scene is currently mounted into
+// #app, drives transitions between scenes (boot -> title -> callsign ->
+// boot -> level1..level5 -> ending), and renders the shared chrome (top
+// status bar and pause menu) around the level scenes. Each scene module
+// (js/scenes/*.js) exports a `mount(container, ctx)` function; goTo()/
+// mountScene() call that function whenever a scene becomes active and hand
+// it a `ctx` object (state accessor, sfx, goTo, menu controls, an
+// AbortSignal for cleanup). Scene progression itself is guarded against
+// state.js's levelsCompleted array, so a player can't skip ahead by URL or
+// stale save data. main.js calls goTo() once on startup to kick everything
+// off.
+
 import { getState, patchState, resetGame, SECTORS } from './state.js';
 import { sfx, setMuted, isMuted } from './audio.js';
 import { setCrtEnabled, glitchBurst, reducedMotion } from './fx.js';
@@ -30,6 +42,9 @@ let currentId = null;
 let currentController = null;
 let currentCleanup = null;
 
+// Gatekeeper for scene entry: a level scene is only reachable once the
+// previous level is marked complete in state.js, and 'ending' requires
+// sector 4 (level5) to be done. Called by goTo() before mounting anything.
 function canEnter(id) {
   const cfg = SCENES[id];
   if (!cfg) return false;
@@ -38,6 +53,9 @@ function canEnter(id) {
   return getState().levelsCompleted[cfg.index - 1] === true;
 }
 
+// Figures out the scene a player should land on when canEnter() rejects
+// their requested destination: the next unfinished level, 'ending' if
+// everything is done, or 'title' if they haven't even picked a callsign yet.
 function fallbackScene() {
   const state = getState();
   const idx = state.levelsCompleted.findIndex((v) => !v);
@@ -46,6 +64,11 @@ function fallbackScene() {
   return `level${idx + 1}`;
 }
 
+// Main navigation entry point. Called by every scene (via ctx.goTo), by
+// main.js on boot, and by the pause menu. Validates the target scene,
+// falls back if it isn't reachable yet, and fades the #app container out
+// before swapping in the new scene (skipped for the very first load or
+// when the user prefers reduced motion).
 export function goTo(id) {
   if (!SCENES[id]) {
     console.warn('[ECHO.EXE] unknown scene', id);
@@ -68,6 +91,11 @@ export function goTo(id) {
   setTimeout(swap, 160);
 }
 
+// Tears down the previous scene (aborts its AbortController and runs its
+// cleanup callback, if any) and mounts the new one into the #app container.
+// Called by goTo() after the fade-out delay. Persists the new scene id to
+// state.js so a reload resumes on the correct scene, and renders the shared
+// status-bar chrome for level scenes.
 function mountScene(id, app) {
   if (currentController) currentController.abort();
   if (typeof currentCleanup === 'function') {
@@ -92,10 +120,15 @@ function mountScene(id, app) {
   requestAnimationFrame(() => requestAnimationFrame(() => app.classList.remove('scene-enter')));
 }
 
+// Re-mounts whatever scene is currently active, giving it a clean slate.
+// Called by the pause menu's "RESTART SECTOR" button.
 export function restartCurrent() {
   goTo(currentId);
 }
 
+// Assembles the context object passed to every scene's mount(container, ctx)
+// call: a live state getter, the abort signal for this scene's lifetime,
+// navigation (goTo), sound effects, and menu controls.
 function buildCtx(signal) {
   return {
     get state() { return getState(); },
@@ -110,6 +143,10 @@ function buildCtx(signal) {
 
 // ---- Chrome: top status bar shown during levels ----
 
+// Builds (or hides) the #statusbar element: sector progress dots, the
+// player marker, sector name/step label, and mute/menu buttons. Called by
+// mountScene() on every scene change; `show` is false for non-level scenes
+// (title, callsign, boot, ending) which run without chrome.
 function renderChrome(show, levelIndex) {
   let bar = qs('#statusbar');
   if (!show) {
@@ -166,6 +203,10 @@ function renderChrome(show, levelIndex) {
 
 // ---- Pause menu overlay ----
 
+// Builds and shows the #pause-menu overlay (resume, restart sector, restart
+// game, sound/CRT toggles, quit to title). Called from the status bar's
+// menu button, from main.js's Escape-key handler, and exposed to scenes via
+// ctx.openMenu.
 export function openMenu() {
   const overlay = qs('#pause-menu');
   overlay.hidden = false;
@@ -215,12 +256,17 @@ export function openMenu() {
   overlay.appendChild(panel);
 }
 
+// Hides and clears the pause menu overlay. Called by the menu's own buttons,
+// by main.js's Escape-key handler, and exposed to scenes via ctx.closeMenu.
 export function closeMenu() {
   const overlay = qs('#pause-menu');
   overlay.hidden = true;
   overlay.innerHTML = '';
 }
 
+// Reports whether the pause menu overlay is currently visible. Used by
+// main.js's Escape-key handler to decide whether Escape should open or
+// close the menu.
 export function isMenuOpen() {
   const overlay = qs('#pause-menu');
   return overlay && !overlay.hidden;

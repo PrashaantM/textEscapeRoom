@@ -1,3 +1,8 @@
+// Scene: a short prompt asking the player to type a callsign (their display
+// name), which is saved to state.js and used throughout dialogue in
+// boot.js and ending.js. Reached from title.js's "New Game" flow; always
+// advances to the boot scene next.
+
 import { patchState } from '../state.js';
 import { sfx } from '../audio.js';
 import { el } from '../utils.js';
@@ -6,6 +11,10 @@ import { typeInto, asciiPre } from './shared.js';
 const MAX_LEN = 12;
 
 export default {
+  // Scene lifecycle entry point, called by sceneManager.js's mountScene()
+  // when this scene becomes active. Renders the input form and types the
+  // prompt heading; submit() saves the trimmed/uppercased tag and moves on
+  // to the boot scene.
   mount(container, ctx) {
     const heading = el('pre', { class: 'ascii callsign-typing' });
     const form = el('form', { class: 'callsign-form', autocomplete: 'off' });
@@ -19,6 +28,9 @@ export default {
       spellcheck: 'false',
     });
 
+    // Normalizes the typed callsign (or defaults to PLAYER1), saves it to
+    // state.js, and advances to the boot scene. Triggered by form submit or
+    // the SKIP button.
     const submit = () => {
       const tag = (input.value || 'PLAYER1').trim().toUpperCase().slice(0, MAX_LEN) || 'PLAYER1';
       sfx.confirm();

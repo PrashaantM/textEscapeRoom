@@ -10,14 +10,20 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <!-- Visual-only overlays, driven by fx.js (setCrtEnabled, flashScreen). -->
   <div id="crt-overlay" aria-hidden="true"></div>
   <div id="screen-flash" aria-hidden="true"></div>
 
+  <!-- Sector progress bar + mute/menu buttons, built by sceneManager.js's
+       renderChrome(); shown only while a level scene is active. -->
   <header id="statusbar" hidden></header>
 
+  <!-- The active scene's content is mounted here by sceneManager.js. -->
   <main id="app" role="main" aria-live="polite"></main>
 
+  <!-- Pause menu overlay, built by sceneManager.js's openMenu(). -->
   <div id="pause-menu" hidden></div>
+  <!-- Toast shown by konami.js when the cheat code is entered. -->
   <div id="konami-toast" role="status" aria-live="polite"></div>
 
   <noscript>
@@ -26,6 +32,14 @@
     </p>
   </noscript>
 
+  <!--
+    Single entry point: js/main.js is loaded as an ES module, so the browser
+    resolves and runs its whole import graph (state.js, sceneManager.js,
+    audio.js, fx.js, utils.js, sprites.js, konami.js, and every file under
+    js/scenes/) automatically in dependency order. There is no other script
+    tag; main.js's boot() function (run on DOMContentLoaded) is what starts
+    the game by calling sceneManager.js's goTo() on the #app element above.
+  -->
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

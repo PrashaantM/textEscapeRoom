@@ -1,9 +1,17 @@
 // Tiny 8-bit style sound synth built on the Web Audio API.
 // No external audio files. Everything is generated at runtime.
 
+// The game's sound layer: a set of tiny oscillator-based sound effects
+// (the `sfx` export) that every scene file plays on key moments (key
+// presses, confirms, errors, level wins). main.js applies the saved mute
+// setting on boot via setMuted(); sceneManager.js's status bar and pause
+// menu toggle it at runtime.
+
 let ctx = null;
 let muted = false;
 
+// Lazily creates (and resumes, if suspended) the shared AudioContext.
+// Called internally by tone() before every sound.
 function getCtx() {
   if (!ctx) {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -19,14 +27,21 @@ function getCtx() {
   window.addEventListener(evt, () => getCtx(), { once: true, passive: true });
 });
 
+// Turns all sfx on/off. Called by main.js on boot (from saved settings) and
+// by sceneManager.js's status bar / pause menu mute toggle.
 export function setMuted(value) {
   muted = value;
 }
 
+// Reports the current mute state. Read by sceneManager.js to render the
+// mute button's icon/label.
 export function isMuted() {
   return muted;
 }
 
+// Plays a single oscillator tone with the given pitch/duration/envelope.
+// The building block every entry in the `sfx` object below is made of;
+// does nothing while muted or if Web Audio isn't available.
 function tone({ freq = 440, duration = 0.1, type = 'square', volume = 0.06, slideTo = null, delaySec = 0 }) {
   if (muted) return;
   const audioCtx = getCtx();
@@ -44,6 +59,8 @@ function tone({ freq = 440, duration = 0.1, type = 'square', volume = 0.06, slid
   osc.stop(t0 + duration + 0.02);
 }
 
+// The catalog of named sound effects scene files call directly (e.g.
+// sfx.select(), sfx.error()) for UI feedback and puzzle outcomes.
 export const sfx = {
   key: () => tone({ freq: 620, duration: 0.02, type: 'square', volume: 0.02 }),
   move: () => tone({ freq: 330, duration: 0.05, type: 'square', volume: 0.05 }),
@@ -65,6 +82,7 @@ export const sfx = {
   coin: () => tone({ freq: 988, duration: 0.06, type: 'square', volume: 0.06, slideTo: 1568 }),
 };
 
+// Returns a random float in [a, b). Used by sfx.glitch() to scatter pitches.
 function randRange(a, b) {
   return a + Math.random() * (b - a);
 }

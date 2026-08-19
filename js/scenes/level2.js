@@ -1,3 +1,9 @@
+// Scene: Sector 1, "ARCADE ZERO". A Simon-Says style memory game: the game
+// flashes a growing directional sequence and the player repeats it with
+// arrow keys or on-screen pads, losing a life on a miss (with a "continue"
+// option) and winning after ROUNDS_TO_WIN rounds. Winning awards the second
+// memory shard via completeLevel(1, digit) and routes to level3.
+
 import { completeLevel, getState } from '../state.js';
 import { sfx } from '../audio.js';
 import { shake, glitchBurst, pulse } from '../fx.js';
@@ -14,6 +20,10 @@ const PADS = [
 ];
 
 export default {
+  // Scene lifecycle entry point, called by sceneManager.js's mountScene()
+  // when this scene becomes active. Builds the arcade cabinet UI (pads,
+  // HUD, start overlay) and wires keyboard/click input; the actual game
+  // loop starts once the player presses START.
   mount(container, ctx) {
     let alive = true;
     ctx.signal.addEventListener('abort', () => { alive = false; });
@@ -57,6 +67,8 @@ export default {
     body.appendChild(el('div', { class: 'arcade-floor' }, [playerItem, padGrid]));
     container.appendChild(el('div', { class: 'level2-scene' }, [frame, startOverlay]));
 
+    // Redraws the round counter and lives display. Called after any change
+    // to `round` or `lives`.
     function renderHud() {
       hud.innerHTML = '';
       hud.appendChild(el('span', {}, `ROUND ${Math.min(round, ROUNDS_TO_WIN)} / ${ROUNDS_TO_WIN}`));
@@ -64,6 +76,9 @@ export default {
     }
     renderHud();
 
+    // Lights up a directional pad briefly and plays its tone. Used both
+    // when the game demonstrates the sequence and when the player presses
+    // a pad themselves.
     function flashPad(dir, ms = 380) {
       const btn = padEls[dir];
       const pad = PADS.find((p) => p.dir === dir);
@@ -72,12 +87,17 @@ export default {
       setTimeout(() => { if (alive) btn.classList.remove('lit'); }, ms);
     }
 
+    // Generates a random sequence of `len` pad directions. Called by
+    // startRound() and missRound() to build the pattern the player repeats.
     function randomSequence(len) {
       const seq = [];
       for (let i = 0; i < len; i++) seq.push(PADS[randInt(0, 3)].dir);
       return seq;
     }
 
+    // Plays back the given sequence by flashing pads in order, then switches
+    // to 'input' phase for the player to repeat it. Called by startRound()
+    // and after a miss.
     async function playSequence(seq) {
       phase = 'showing';
       message.textContent = 'WATCH CLOSELY...';
@@ -93,6 +113,8 @@ export default {
       message.textContent = 'YOUR TURN';
     }
 
+    // Generates and plays the sequence for the current round. Called at the
+    // start of the game and after each round clear or life lost.
     function startRound() {
       if (!alive) return;
       sequence = randomSequence(round + 2);
@@ -100,6 +122,10 @@ export default {
       playSequence(sequence);
     }
 
+    // Handles a player pressing a pad (via click or arrow key): checks it
+    // against the expected sequence position, advancing on a match or
+    // failing the round via missRound(). Called by pad click handlers and
+    // the global keydown listener.
     function handlePress(dir) {
       if (phase !== 'input' || !alive) return;
       flashPad(dir, 220);
@@ -111,6 +137,9 @@ export default {
       }
     }
 
+    // Advances to the next round on a successful repeat, or calls
+    // winGame() once ROUNDS_TO_WIN is exceeded. Called by handlePress()
+    // when the player completes the sequence.
     async function roundClear() {
       phase = 'clear';
       sfx.success();
@@ -126,6 +155,9 @@ export default {
       startRound();
     }
 
+    // Handles a wrong pad press: deducts a life, shakes the grid, and
+    // either shows the continue overlay (out of lives) or replays a fresh
+    // sequence for the same round. Called by handlePress() on a mismatch.
     async function missRound() {
       phase = 'clear';
       lives--;
@@ -145,6 +177,8 @@ export default {
       playSequence(sequence);
     }
 
+    // Shows a "GAME OVER / CONTINUE?" overlay that resets lives to 3 and
+    // restarts the current round. Called by missRound() when lives hit 0.
     function showContinue() {
       phase = 'continue';
       const overlay = el('div', { class: 'arcade-start' }, [
@@ -163,6 +197,10 @@ export default {
       container.querySelector('.level2-scene').appendChild(overlay);
     }
 
+    // Handles winning the arcade game: plays effects, marks the level
+    // complete in state.js with the second shard digit, and shows the
+    // sector-cleared interstitial routing to level3. Called by
+    // roundClear() once ROUNDS_TO_WIN is exceeded.
     function winGame() {
       phase = 'won';
       sfx.unlock();
@@ -183,6 +221,8 @@ export default {
       }, 700);
     }
 
+    // Dismisses the "INSERT COIN" start overlay and starts the first round.
+    // Called by the PRESS START button and by Enter while phase is 'ready'.
     function beginGame() {
       sfx.confirm();
       startOverlay.remove();

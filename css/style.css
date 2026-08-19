@@ -1,5 +1,14 @@
 /* ========================================================================
    ECHO.EXE: a retro browser escape room
+
+   Visual approach: a dark terminal/CRT aesthetic built entirely from CSS
+   (scanline overlay, glow/shadow accents, pixel-art canvases from
+   sprites.js) with two bitmap fonts standing in for a chunky arcade
+   display font and a soft green terminal font. Sections below are ordered
+   to mirror the scene progression driven by sceneManager.js: shared
+   chrome and fx utilities first, then one section per scene (title,
+   callsign, boot, level1..level5, interstitial, ending), and finally
+   small-screen responsive overrides.
    ======================================================================== */
 
 @font-face {
@@ -16,6 +25,8 @@
   font-weight: 400;
 }
 
+/* ---- design tokens ---- */
+
 :root {
   --bg: #05070a;
   --bg-panel: #0c1116;
@@ -28,6 +39,8 @@
   --font-display: 'Press Start 2P', monospace;
   --font-mono: 'VT323', 'Courier New', monospace;
 }
+
+/* ---- base reset ---- */
 
 * { box-sizing: border-box; }
 
@@ -255,6 +268,8 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 
 /* ---- shared: terminal-window frame ---- */
 
+/* the terminal-window frame built by scenes/shared.js's terminalFrame(),
+   reused by every level scene */
 .term-frame {
   --accent: #39ff14;
   width: min(94vw, 820px);

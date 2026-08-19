@@ -1,3 +1,11 @@
+// Scene: the final scene, reached only once Sector 4 (level5) is complete.
+// Plays ECHO's closing monologue (with a bonus line if the Konami code was
+// found), reveals the restored title logo, lets the player pick an
+// epithet, then shows a scrolling credits/stats screen with a "play again"
+// button that resets state.js and returns to the title scene. This is the
+// last stop in the boot -> title -> callsign -> level1..level5 -> ending
+// progression that sceneManager.js drives.
+
 import { getState, patchState, resetGame } from '../state.js';
 import { sfx } from '../audio.js';
 import { delay, el } from '../utils.js';
@@ -6,6 +14,8 @@ import { drawGhost } from '../sprites.js';
 import { TITLE_LOGO, THE_END } from '../asciiArt.js';
 import { typeInto, asciiPre } from './shared.js';
 
+// Formats a millisecond duration as "M:SS" for the credits' escape time.
+// Called by showCredits().
 function formatTime(ms) {
   const total = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(total / 60);
@@ -16,6 +26,10 @@ function formatTime(ms) {
 const EPITHETS = ['THE ONE WHO STAYED', 'JUST PASSING THROUGH', 'PLAYER ONE'];
 
 export default {
+  // Scene lifecycle entry point, called by sceneManager.js's mountScene()
+  // when this scene becomes active. Stamps stats.finishedAt in state.js if
+  // not already set, then runs the monologue/reveal sequence before
+  // handing off to showChoice().
   mount(container, ctx) {
     let alive = true;
     ctx.signal.addEventListener('abort', () => { alive = false; });
@@ -90,6 +104,9 @@ export default {
       showChoice();
     })();
 
+    // Shows the epithet-picker ("How should the log remember you?") after
+    // the monologue finishes. Called at the end of the async intro
+    // sequence above.
     function showChoice() {
       const choiceBox = el('div', { class: 'ending-choice' }, [
         el('p', {}, 'How should the log remember you?'),
@@ -106,6 +123,10 @@ export default {
       btnRow.querySelector('button')?.focus();
     }
 
+    // Renders the scrolling credits screen: elapsed time, a per-sector
+    // achievement log (reading from state.js's flags), and static credits,
+    // plus a "PLAY AGAIN" button that resets the game via state.js and
+    // returns to the title scene. Called by the epithet button's onclick.
     function showCredits(epithet) {
       const elapsed = (state.stats.finishedAt || Date.now()) - (state.stats.startedAt || Date.now());
       const achievements = [

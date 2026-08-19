@@ -1,7 +1,15 @@
+// Scene: the "loading ECHO.EXE" cinematic that plays after the player picks
+// a callsign (or on skip). It types out a short intro monologue, then waits
+// for a key/click before handing off to level1 (Sector 0). sceneManager.js
+// mounts this scene's default export's mount(container, ctx) when
+// state.scene is 'boot'; ctx.goTo('level1') advances the game.
+
 import { getState } from '../state.js';
 import { delay, el } from '../utils.js';
 import { typeInto } from './shared.js';
 
+// Builds the list of boot-log lines, personalized with the player's tag
+// from state.js. Called by mount() to get the dialogue to type out.
 function lines(tag) {
   return [
     'BOOT SEQUENCE INITIATED...',
@@ -17,6 +25,10 @@ function lines(tag) {
 }
 
 export default {
+  // Scene lifecycle entry point, called by sceneManager.js's mountScene()
+  // whenever this scene becomes active. Renders the boot log UI, types out
+  // each line in sequence (skippable via the SKIP button, or any
+  // key/click once typing finishes), then advances to level1.
   mount(container, ctx) {
     const state = getState();
     const log = el('div', { class: 'boot-log' });

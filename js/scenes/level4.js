@@ -1,3 +1,12 @@
+// Scene: Sector 3, "VAULT BREACH". A Mastermind-style guessing puzzle: 6
+// candidate words are hidden in noisy terminal output, one is the secret
+// passkey, and the player has a limited number of attempts to find it by
+// guessing words and reading how many letters land in the correct position.
+// Two bracket-pair tokens hidden in the noise grant a one-time "remove a
+// dud" or "restore an attempt" bonus (tracked via state.js's vaultDudUsed /
+// vaultAttemptRestored flags). Solving it awards the fourth memory shard
+// via completeLevel(3, digit) and routes to level5.
+
 import { completeLevel, getState, setFlag } from '../state.js';
 import { sfx } from '../audio.js';
 import { shake, glitchBurst, pulse } from '../fx.js';
@@ -9,12 +18,16 @@ const WORD_BANK = ['ECHOES', 'ARCADE', 'MEMORY', 'BOOTUP', 'CIPHER', 'GLITCH', '
 const NOISE_CHARS = '!@#$%^&*<>{}[]()~/|;:+=01'.split('');
 const START_ATTEMPTS = 4;
 
+// Generates a string of random noise characters of the given length. Used
+// to pad terminal rows with visual clutter that hides the real tokens.
 function garbage(len) {
   let s = '';
   for (let i = 0; i < len; i++) s += NOISE_CHARS[randInt(0, NOISE_CHARS.length - 1)];
   return s;
 }
 
+// Generates a random 4-digit hex address string (e.g. "0x1A2B") used as
+// flavor text at the start of each noise row.
 function hexAddr() {
   const chars = '0123456789ABCDEF';
   let s = '0x';
@@ -23,6 +36,9 @@ function hexAddr() {
 }
 
 export default {
+  // Scene lifecycle entry point, called by sceneManager.js's mountScene()
+  // when this scene becomes active. Sets up the vault UI shell, then calls
+  // setup() to generate the first puzzle round.
   mount(container, ctx) {
     let candidates, passkey, attemptsLeft, guessLog, dudBtn, attemptBtn, wordButtons, alive = true;
     ctx.signal.addEventListener('abort', () => { alive = false; });
@@ -49,17 +65,25 @@ export default {
     body.appendChild(lockMsg);
     container.appendChild(el('div', { class: 'level4-scene' }, [roomScene, frame]));
 
+    // Redraws the attempts-remaining HUD. Called after every guess and
+    // bracket use, and at the start of each round via setup().
     function renderHud() {
       hud.innerHTML = '';
       hud.appendChild(el('span', {}, `ATTEMPTS LEFT: ${attemptsLeft}`));
       hud.appendChild(el('span', {}, `PASSKEY LENGTH: 6`));
     }
 
+    // Appends a plain status/hint line to the log (as opposed to a scored
+    // guess row). Used for bracket effects and lockout messages.
     function logLine(text, cls = '') {
       log.appendChild(el('p', { class: `vault-log-line ${cls}`.trim() }, text));
       log.scrollTop = log.scrollHeight;
     }
 
+    // Picks a fresh set of 6 candidate words and a secret passkey among
+    // them, resets attempts/log, and rebuilds the noisy terminal rows
+    // (words, the two bracket bonus tokens, and pure noise, all shuffled).
+    // Called on mount and again by lockout() after attempts run out.
     function setup() {
       candidates = sample(WORD_BANK, 6);
       passkey = candidates[randInt(0, 5)];
@@ -106,12 +130,18 @@ export default {
       });
     }
 
+    // Counts how many letters of `guess` are correct and in the right
+    // position compared to the secret passkey. Called by renderGuessRow()
+    // to score each guess.
     function matchCount(guess) {
       let n = 0;
       for (let i = 0; i < guess.length; i++) if (guess[i] === passkey[i]) n++;
       return n;
     }
 
+    // Prints a guessed word's letters (highlighting correct-position hits)
+    // and its match score to the log. Called by guessWord() after every
+    // guess.
     function renderGuessRow(word, isWin) {
       const letters = [];
       for (let i = 0; i < word.length; i++) {
@@ -127,6 +157,10 @@ export default {
       log.scrollTop = log.scrollHeight;
     }
 
+    // Handles the player clicking a candidate word token: spends an
+    // attempt, scores the guess, calls win() on a match, or triggers
+    // lockout() once attempts are exhausted. Called by each word token's
+    // onclick.
     async function guessWord(word, btn) {
       if (!alive || btn.classList.contains('used') || attemptsLeft <= 0) return;
       btn.classList.add('used');
@@ -148,6 +182,10 @@ export default {
       }
     }
 
+    // Handles clicking one of the two hidden bracket-pair bonus tokens:
+    // 'dud' removes a non-answer candidate word from play (sets
+    // vaultDudUsed), 'attempt' grants +1 attempt (sets vaultAttemptRestored).
+    // Called by each bracket token's onclick.
     function useBracket(effect, btn) {
       if (!alive || btn.classList.contains('used')) return;
       btn.classList.add('used');
@@ -173,6 +211,9 @@ export default {
       }
     }
 
+    // Handles running out of attempts: shows a lockout message, disables
+    // the current round's buttons, then calls setup() to reroll a fresh
+    // passkey and candidates. Called by guessWord() when attemptsLeft hits 0.
     async function lockout() {
       lockMsg.textContent = 'TERMINAL LOCKED. REROUTING...';
       glitchBurst(frame, 500);
@@ -184,6 +225,10 @@ export default {
       logLine('Connection rerouted. Fresh passkey loaded.', 'vault-hint');
     }
 
+    // Handles guessing the correct passkey: opens the vault visually, marks
+    // the level complete in state.js with the fourth shard digit, and shows
+    // the sector-cleared interstitial routing to level5. Called by
+    // guessWord() on a correct guess.
     function win() {
       sfx.unlock();
       glitchBurst(frame, 400);

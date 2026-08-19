@@ -1,9 +1,15 @@
 // Tiny hand-built "pixel art" drawn on <canvas> with plain rectangles.
 // No image assets. Everything here is generated at runtime so the whole
-// game ships as text files.
+// game ships as text files. Each draw* function below returns a canvas
+// element ready to append to the DOM. Scene files (title.js, level1..
+// level5.js, ending.js) and sceneManager.js's status bar call these to
+// place the player, items, doors, and other room objects.
 
 const BG = '#0a0e12';
 
+// Returns a `b(gx, gy, gw, gh, color)` helper bound to a canvas context,
+// letting each draw* function below paint pixel-grid rectangles by grid
+// coordinates instead of raw pixels. Called once per drawing function.
 function grid(ctx, unit) {
   return (gx, gy, gw, gh, color) => {
     ctx.fillStyle = color;
@@ -11,6 +17,9 @@ function grid(ctx, unit) {
   };
 }
 
+// Creates a sized <canvas> with a 2d context ready for pixel-art drawing
+// (smoothing disabled). Called by every draw* function to set up its canvas
+// before painting sprite pixels onto it.
 function makeCanvas(cols, rows, unit, className) {
   const canvas = document.createElement('canvas');
   canvas.width = cols * unit;
@@ -22,6 +31,8 @@ function makeCanvas(cols, rows, unit, className) {
   return { canvas, ctx };
 }
 
+// Draws the small ghost sprite used as ECHO's avatar. Called by title.js and
+// ending.js.
 export function drawGhost(color = '#7cf9d0', unit = 8, className = 'sprite sprite-ghost') {
   const { canvas, ctx } = makeCanvas(16, 16, unit, className);
   const b = grid(ctx, unit);
@@ -38,6 +49,8 @@ export function drawGhost(color = '#7cf9d0', unit = 8, className = 'sprite sprit
   return canvas;
 }
 
+// Draws the floppy disk sprite shown on the title screen. Called by
+// title.js.
 export function drawFloppy(accent = '#4cd6ff', unit = 8, className = 'sprite sprite-floppy') {
   const { canvas, ctx } = makeCanvas(16, 16, unit, className);
   const b = grid(ctx, unit);
@@ -54,6 +67,8 @@ export function drawFloppy(accent = '#4cd6ff', unit = 8, className = 'sprite spr
   return canvas;
 }
 
+// Draws the memory-shard collectible sprite. Called by scenes/shared.js's
+// showInterstitial (awarded per level) and level5.js's shard case display.
 export function drawShard(color = '#b967ff', unit = 8, className = 'sprite sprite-shard') {
   const { canvas, ctx } = makeCanvas(10, 9, unit, className);
   const b = grid(ctx, unit);
@@ -72,6 +87,8 @@ export function drawShard(color = '#b967ff', unit = 8, className = 'sprite sprit
   return canvas;
 }
 
+// Draws the keycard item sprite. Called by level1.js once the drawer is
+// opened and the keycard is picked up.
 export function drawKeycard(accent = '#39ff14', unit = 8, className = 'sprite sprite-keycard') {
   const { canvas, ctx } = makeCanvas(14, 9, unit, className);
   const b = grid(ctx, unit);
@@ -82,6 +99,9 @@ export function drawKeycard(accent = '#39ff14', unit = 8, className = 'sprite sp
   return canvas;
 }
 
+// Draws a door sprite, colored red/locked or green/open based on `locked`.
+// Called by level1.js, level3.js, and level4.js for their respective exit
+// doors and vault.
 export function drawDoor(locked = true, unit = 8, className = 'sprite sprite-door') {
   const { canvas, ctx } = makeCanvas(12, 14, unit, className);
   const b = grid(ctx, unit);
@@ -96,6 +116,8 @@ export function drawDoor(locked = true, unit = 8, className = 'sprite sprite-doo
   return canvas;
 }
 
+// Draws the desk drawer sprite, shut or open (revealing the keycard).
+// Called by level1.js.
 export function drawDrawer(open = false, unit = 8, className = 'sprite sprite-drawer') {
   const { canvas, ctx } = makeCanvas(14, 10, unit, className);
   const b = grid(ctx, unit);
@@ -112,6 +134,7 @@ export function drawDrawer(open = false, unit = 8, className = 'sprite sprite-dr
   return canvas;
 }
 
+// Draws the room terminal sprite. Called by level1.js's room diorama.
 export function drawTerminal(unit = 8, className = 'sprite sprite-terminal') {
   const { canvas, ctx } = makeCanvas(12, 10, unit, className);
   const b = grid(ctx, unit);
@@ -123,6 +146,9 @@ export function drawTerminal(unit = 8, className = 'sprite sprite-terminal') {
   return canvas;
 }
 
+// Draws the player character sprite, tinted with the current sector's
+// accent color. Called by sceneManager.js's status bar and by every level
+// scene to mark the player's position in its room diorama.
 export function drawPlayer(accent = '#39ff14', unit = 8, className = 'sprite sprite-player') {
   const { canvas, ctx } = makeCanvas(10, 16, unit, className);
   const b = grid(ctx, unit);
@@ -144,6 +170,7 @@ export function drawPlayer(accent = '#39ff14', unit = 8, className = 'sprite spr
   return canvas;
 }
 
+// Draws the vault padlock sprite. Called by level4.js's vault status badge.
 export function drawPadlock(accent = '#00ff9c', unit = 8, className = 'sprite sprite-padlock') {
   const { canvas, ctx } = makeCanvas(12, 12, unit, className);
   const b = grid(ctx, unit);

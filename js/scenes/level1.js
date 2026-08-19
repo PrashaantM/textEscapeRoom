@@ -1,3 +1,11 @@
+// Scene: Sector 0, "BOOT-UP". A text-adventure-style puzzle where the
+// player types (or taps quick-command chips for) commands like `look`,
+// `ls -a`, `cat .access_code`, `open drawer`, and `unlock door <code>` to
+// find a hidden access code and a keycard, then unlock the door. Solving it
+// awards the first memory shard (codeDigits[0] in state.js) via
+// completeLevel(0, digit), then shows shared.js's interstitial and routes
+// to level2.
+
 import { completeLevel, getState } from '../state.js';
 import { sfx } from '../audio.js';
 import { shake, pulse } from '../fx.js';
@@ -18,11 +26,18 @@ const HELP_ROWS = [
   ['hint', 'nudge yourself in the right direction'],
 ];
 
+// Strips a leading './' and trims whitespace from a filename argument, so
+// `cat ./readme.txt` and `cat readme.txt` behave the same. Called by run()
+// when handling the `cat` command.
 function normalizeFile(s) {
   return (s || '').replace(/^\.\//, '').trim();
 }
 
 export default {
+  // Scene lifecycle entry point, called by sceneManager.js's mountScene()
+  // when this scene becomes active. Sets up the room diorama, the terminal
+  // log/input, quick-command chips, and the command parser (run()), and
+  // kicks off the intro text.
   mount(container, ctx) {
     const flags = { lookedAround: false, sawReadme: false, sawHiddenList: false, sawAccessCode: false, openedDrawer: false, hasKeycard: false, doorUnlocked: false };
     const inventory = [];
@@ -35,14 +50,20 @@ export default {
     let justActed = false;
     let doorPadOpen = false;
 
+    // Click handler for the terminal sprite: runs 'look' first, then 'ls -a'
+    // on subsequent clicks, as a tap-friendly alternative to typing.
     function onTerminalClick() {
       submitCommand(!flags.lookedAround ? 'look' : 'ls -a');
     }
 
+    // Click handler for the desk sprite: opens the drawer, then takes the
+    // keycard on the next click.
     function onDeskClick() {
       submitCommand(!flags.openedDrawer ? 'open drawer' : 'take keycard');
     }
 
+    // Click handler for the door sprite: attempts the unlock command if the
+    // player lacks a keycard, otherwise toggles the on-screen numeric keypad.
     function onDoorClick() {
       if (flags.doorUnlocked) return;
       if (!flags.hasKeycard) { submitCommand('unlock door'); return; }
@@ -50,6 +71,9 @@ export default {
       renderRoomScene();
     }
 
+    // Builds the tap-to-enter numeric keypad UI (digit slots, number pad,
+    // backspace/try buttons) shown when the player has a keycard and opens
+    // the door pad. Called by renderRoomScene() while doorPadOpen is true.
     function buildDoorPad() {
       const digits = [];
       const slotEls = [];
@@ -59,15 +83,18 @@ export default {
         slotEls.push(s);
         slotRow.appendChild(s);
       }
+      // Redraws the 3 digit slots to reflect the current `digits` array.
       function renderSlots() {
         slotEls.forEach((s, i) => { s.textContent = digits[i] !== undefined ? String(digits[i]) : '_'; });
       }
+      // Appends a tapped digit to the keypad entry, up to 3 digits.
       function enterDigit(n) {
         if (digits.length >= 3) return;
         digits.push(n);
         sfx.key();
         renderSlots();
       }
+      // Removes the last entered digit.
       function backspace() {
         digits.pop();
         renderSlots();
@@ -95,6 +122,10 @@ export default {
       ]);
     }
 
+    // Redraws the room diorama (door, desk, terminal, player, and the
+    // keycard once acquired) based on current `flags`, and positions the
+    // player sprite next to whatever the player should focus on next.
+    // Called after every flag-changing command and by the click handlers.
     function renderRoomScene() {
       roomScene.innerHTML = '';
       const doorItem = el('button', {
@@ -154,6 +185,8 @@ export default {
 
     const input = inputRow.querySelector('input');
 
+    // Appends one typed-out line to the terminal log. Used by nearly every
+    // command handler in run() to print output.
     function printRaw(text, cls = '') {
       const p = el('p', { class: `term-line ${cls}`.trim() });
       log.appendChild(p);
@@ -161,10 +194,15 @@ export default {
       return typeInto(p, text, { speed: 6, sound: false });
     }
 
+    // Prints several lines in sequence via printRaw(). Used for multi-line
+    // command output like file contents or the boot intro.
     async function printLines(lines, cls = '') {
       for (const line of lines) await printRaw(line, cls);
     }
 
+    // Builds a clickable chip that runs `cmd` through submitCommand() when
+    // tapped, showing `label` (or the command itself) as its text. Used by
+    // the quick-command bar, help table, hint text, and file listings.
     function cmdChip(cmd, label) {
       return el('button', {
         class: 'cmd-chip',
@@ -172,11 +210,15 @@ export default {
       }, label || cmd);
     }
 
+    // Appends an arbitrary DOM node (not typed text) to the terminal log.
+    // Used for command output that includes buttons, like help tables.
     function printNode(node) {
       log.appendChild(node);
       log.scrollTop = log.scrollHeight;
     }
 
+    // Prints the list of available commands as a table of chip/description
+    // rows. Called by run() when the player types 'help'.
     function printHelp() {
       printRaw('AVAILABLE COMMANDS:');
       const table = el('div', { class: 'help-table' },
@@ -188,6 +230,9 @@ export default {
       printNode(table);
     }
 
+    // Rebuilds the row of tap-friendly command chips to show only actions
+    // relevant to the player's current progress (based on `flags`). Called
+    // after every state-changing command and once on mount.
     function renderQuickBar() {
       quickBar.innerHTML = '';
       const chips = [];
@@ -203,6 +248,8 @@ export default {
       quickBar.append(...chips.map(([cmd, label]) => cmdChip(cmd, label)));
     }
 
+    // Prints a row of `cat <file>` chips for the given filenames. Called by
+    // run() for the `ls` and `ls -a` commands.
     function printFileList(files) {
       const row = el('div', { class: 'help-row file-row' },
         files.map((f) => cmdChip(`cat ${f}`, f))
@@ -210,6 +257,9 @@ export default {
       printNode(row);
     }
 
+    // Determines the next hint text and suggested command based on which
+    // milestone (look, readme, hidden listing, access code, drawer,
+    // keycard, unlock) the player hasn't reached yet. Called by printHint().
     function hintInfo() {
       if (!flags.lookedAround) return { text: 'HINT: try', cmd: 'look' };
       if (!flags.sawReadme) return { text: 'HINT: there is a readme file nearby. Try', cmd: 'cat readme.txt' };
@@ -220,11 +270,17 @@ export default {
       return { text: 'HINT: you have the code and the keycard. Try', cmd: 'unlock door 739' };
     }
 
+    // Prints the current hint line with a clickable suggested command.
+    // Called by run() when the player types 'hint'.
     function printHint() {
       const { text, cmd } = hintInfo();
       printNode(el('p', { class: 'term-line term-hint' }, [`${text}: `, cmdChip(cmd)]));
     }
 
+    // Handles a correct door code: marks the flag, prints the unlock text,
+    // marks the level complete in state.js with the first shard digit, and
+    // shows the sector-cleared interstitial routing to level2. Called by
+    // tryUnlock() on a correct code.
     async function onDoorSolved() {
       flags.doorUnlocked = true;
       await printLines(['The keypad flashes green. Bolts retract with a heavy CLUNK.', 'The steel door slides open onto darkness, and a set of stairs down.'], 'term-success');
@@ -243,6 +299,10 @@ export default {
       });
     }
 
+    // Validates a door-code guess: requires a keycard and a numeric code,
+    // triggers onDoorSolved() on a match (739), otherwise shows an error and
+    // shakes the terminal. Called by the door pad's TRY CODE button and by
+    // run() for `unlock door <code>` style commands.
     async function tryUnlock(argStr) {
       const digits = (argStr || '').replace(/\D/g, '');
       if (!flags.hasKeycard) {
@@ -262,6 +322,10 @@ export default {
       await printRaw('ACCESS DENIED. The keypad buzzes and resets.', 'term-error');
     }
 
+    // The command parser: normalizes the typed/tapped input, splits it into
+    // a verb and arguments, and dispatches to the matching room action
+    // (look, ls, cat, open, take, inventory, unlock, hint, etc). Called by
+    // submitCommand() for every command the player enters.
     async function run(raw) {
       const cmd = raw.trim().toLowerCase().replace(/\s+/g, ' ');
       if (!cmd) return;
@@ -329,6 +393,9 @@ export default {
       return printRaw(`SECTOR 0: command not recognized. Type 'help'.`, 'term-error');
     }
 
+    // Echoes the entered command into the log, records it in command
+    // history, and runs it. Called by the terminal input's Enter handler,
+    // quick-command chips, and the room-object click handlers.
     function submitCommand(val) {
       if (!val.trim()) return;
       printRaw(`> ${val}`, 'term-echo');
