@@ -1,5 +1,5 @@
 // Tiny hand-built "pixel art" drawn on <canvas> with plain rectangles.
-// No image assets -- everything here is generated at runtime so the whole
+// No image assets. Everything here is generated at runtime so the whole
 // game ships as text files.
 
 const BG = '#0a0e12';

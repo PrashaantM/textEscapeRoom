@@ -83,7 +83,7 @@ export default {
       ghost,
       menu,
       el('p', { class: 'title-hint' }, '↑↓ SELECT · ENTER CONFIRM · TRY THE KONAMI CODE'),
-      el('p', { class: 'title-footer' }, 'ECHO.EXE — a browser escape room · originally textEscapeRoom'),
+      el('p', { class: 'title-footer' }, 'ECHO.EXE: a browser escape room · originally textEscapeRoom'),
     ]));
 
     requestAnimationFrame(() => buttons[0].focus());

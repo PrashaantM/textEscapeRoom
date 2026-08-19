@@ -1,5 +1,5 @@
 // Tiny 8-bit style sound synth built on the Web Audio API.
-// No external audio files -- everything is generated at runtime.
+// No external audio files. Everything is generated at runtime.
 
 let ctx = null;
 let muted = false;

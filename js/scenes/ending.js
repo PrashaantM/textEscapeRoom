@@ -73,7 +73,7 @@ export default {
 
       const reveal = el('div', { class: 'ending-reveal' }, [
         asciiPre(TITLE_LOGO, 'title-logo restored'),
-        el('p', { class: 'title-tagline restored-tag' }, '[ ECHO.EXE — RESTORED ]'),
+        el('p', { class: 'title-tagline restored-tag' }, '[ ECHO.EXE :: RESTORED ]'),
         drawGhost('#ffe9a8', 9, 'sprite sprite-ghost title-ghost'),
       ]);
       scene.appendChild(reveal);
@@ -109,13 +109,13 @@ export default {
     function showCredits(epithet) {
       const elapsed = (state.stats.finishedAt || Date.now()) - (state.stats.startedAt || Date.now());
       const achievements = [
-        'KEYCARD RECOVERED — SECTOR 0',
-        'HIGH SCORE SET — SECTOR 1',
-        'POWER RESTORED — SECTOR 2',
-        state.flags.vaultDudUsed ? 'VAULT CRACKED (WITH A BACKDOOR) — SECTOR 3' : 'VAULT CRACKED — SECTOR 3',
-        'MEMORY REASSEMBLED — SECTOR 4',
+        'KEYCARD RECOVERED :: SECTOR 0',
+        'HIGH SCORE SET :: SECTOR 1',
+        'POWER RESTORED :: SECTOR 2',
+        state.flags.vaultDudUsed ? 'VAULT CRACKED (WITH A BACKDOOR) :: SECTOR 3' : 'VAULT CRACKED :: SECTOR 3',
+        'MEMORY REASSEMBLED :: SECTOR 4',
       ];
-      if (state.flags.konami) achievements.push('SECRET FOUND — THE OLD CODE');
+      if (state.flags.konami) achievements.push('SECRET FOUND :: THE OLD CODE');
 
       const credits = el('div', { class: 'credits-wrap' }, [
         el('div', { class: 'credits-crawl' }, [
@@ -125,10 +125,10 @@ export default {
           el('h3', { class: 'credits-heading' }, 'LOG ENTRIES'),
           ...achievements.map((a) => el('p', { class: 'credits-line small' }, a)),
           el('h3', { class: 'credits-heading' }, 'CREDITS'),
-          el('p', { class: 'credits-line' }, 'GAME DESIGN & CODE — PRASHAANT M'),
-          el('p', { class: 'credits-line' }, `STARRING — ${state.playerTag || 'GUEST'}`),
-          el('p', { class: 'credits-line' }, 'VOICE OF ECHO — YOUR IMAGINATION'),
-          el('p', { class: 'credits-line' }, 'SPECIAL THANKS — every dusty floppy disk'),
+          el('p', { class: 'credits-line' }, 'GAME DESIGN & CODE: PRASHAANT M'),
+          el('p', { class: 'credits-line' }, `STARRING: ${state.playerTag || 'GUEST'}`),
+          el('p', { class: 'credits-line' }, 'VOICE OF ECHO: YOUR IMAGINATION'),
+          el('p', { class: 'credits-line' }, 'SPECIAL THANKS: every dusty floppy disk'),
           el('p', { class: 'credits-line' }, 'ORIGINALLY: textEscapeRoom (pygame, 2024)'),
           el('p', { class: 'credits-line' }, 'REBUILT AS: ECHO.EXE (browser, 2026)'),
         ]),

@@ -1,5 +1,5 @@
 /* ========================================================================
-   ECHO.EXE — a retro browser escape room
+   ECHO.EXE: a retro browser escape room
    ======================================================================== */
 
 @font-face {
@@ -416,7 +416,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .skip-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ========================================================================
-   Level 1 — terminal parser
+   Level 1: terminal parser
    ======================================================================== */
 
 .level1-scene { width: 100%; display: flex; justify-content: center; }
@@ -432,7 +432,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .term-input:focus { outline: none; }
 
 /* ========================================================================
-   Level 2 — arcade zero
+   Level 2: arcade zero
    ======================================================================== */
 
 .level2-scene { width: 100%; display: flex; justify-content: center; position: relative; }
@@ -489,7 +489,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .ascii-glitch { color: var(--danger); font-size: 1.1rem; }
 
 /* ========================================================================
-   Level 3 — breaker ward
+   Level 3: breaker ward
    ======================================================================== */
 
 .level3-scene { width: 100%; display: flex; justify-content: center; }
@@ -509,7 +509,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .ambient-line { text-align: center; color: var(--fg-dim); font-style: italic; min-height: 1.4em; font-size: 1.05rem; }
 
 /* ========================================================================
-   Level 4 — vault breach
+   Level 4: vault breach
    ======================================================================== */
 
 .level4-scene { width: 100%; display: flex; justify-content: center; }
@@ -542,7 +542,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .vault-lock-msg { color: var(--danger); min-height: 1.4em; text-align: center; font-family: var(--font-display); font-size: 0.6rem; }
 
 /* ========================================================================
-   Level 5 — the core
+   Level 5: the core
    ======================================================================== */
 
 .level5-scene { width: 100%; display: flex; justify-content: center; }

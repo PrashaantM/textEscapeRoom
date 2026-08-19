@@ -29,7 +29,7 @@ export default {
     const history = [];
     let historyIdx = -1;
 
-    const frame = terminalFrame({ title: 'SECTOR 0 // BOOT-UP — root@echo:~$', accent: '#39ff14' });
+    const frame = terminalFrame({ title: 'SECTOR 0 // BOOT-UP :: root@echo:~$', accent: '#39ff14' });
     const log = el('div', { class: 'term-log', id: 'l1-log', role: 'log', 'aria-live': 'polite' });
     const inputRow = el('div', { class: 'term-input-row' }, [
       el('span', { class: 'term-prompt' }, '>'),
@@ -70,14 +70,14 @@ export default {
 
     async function onDoorSolved() {
       flags.doorUnlocked = true;
-      await printLines(['The keypad flashes green. Bolts retract with a heavy CLUNK.', 'The steel door slides open onto darkness -- and a set of stairs down.'], 'term-success');
+      await printLines(['The keypad flashes green. Bolts retract with a heavy CLUNK.', 'The steel door slides open onto darkness, and a set of stairs down.'], 'term-success');
       sfx.unlock();
       const digit = getState().codeDigits[0];
       completeLevel(0, digit);
       await delay(500);
       showInterstitial(container.querySelector('.level1-scene'), {
         levelIndex: 0,
-        storyBeat: 'ECHO: "Good. That part of me remembers you now. Head down -- Sector 1 is louder than this one."',
+        storyBeat: 'ECHO: "Good. That part of me remembers you now. Head down: Sector 1 is louder than this one."',
         shardDigit: digit,
         ctaLabel: 'DESCEND ▶',
         onContinue: () => ctx.goTo('level2'),
@@ -87,7 +87,7 @@ export default {
     async function tryUnlock(argStr) {
       const digits = (argStr || '').replace(/\D/g, '');
       if (!flags.hasKeycard) {
-        await printRaw('The keypad is dead. It needs power -- maybe a keycard would help.', 'term-error');
+        await printRaw('The keypad is dead. It needs power. Maybe a keycard would help.', 'term-error');
         return;
       }
       if (!digits) {
@@ -120,10 +120,10 @@ export default {
         const file = normalizeFile(args);
         if (file === 'readme.txt') {
           flags.sawReadme = true;
-          return printLines(['SECTOR 0 STATUS: ONLINE.', "If you're reading this, ECHO let you in.", "Nothing here is ever truly deleted -- even what's hidden.", '(hint: try `ls -a`)']);
+          return printLines(['SECTOR 0 STATUS: ONLINE.', "If you're reading this, ECHO let you in.", "Nothing here is ever truly deleted. Even what's hidden.", '(hint: try `ls -a`)']);
         }
         if (file === 'sector.log') {
-          return printLines(['LOG 004: Something moves in the walls after hours.', "Maintenance says it's just the pipes.", "I don't believe maintenance anymore.", '   -- J. Alvarez, night technician (filed no further reports)']);
+          return printLines(['LOG 004: Something moves in the walls after hours.', "Maintenance says it's just the pipes.", "I don't believe maintenance anymore.", '   signed, J. Alvarez, night technician (filed no further reports)']);
         }
         if (file === '.access_code') {
           flags.sawHiddenList = true;

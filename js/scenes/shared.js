@@ -26,7 +26,7 @@ export async function typeInto(node, text, opts = {}) {
 }
 
 // Full-panel "sector cleared" interstitial rendered inside a level's own
-// container. Not a scene change -- keeps the sector's chrome/status bar.
+// container. Not a scene change: the sector's chrome/status bar stays put.
 export function showInterstitial(container, opts) {
   const {
     levelIndex,

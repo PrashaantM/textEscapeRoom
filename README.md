@@ -1,7 +1,7 @@
 # ECHO.EXE
 
 A nostalgic, browser-based escape room. Boot up an old machine, clear five
-increasingly strange sectors, and find out what — or who — has really been
+increasingly strange sectors, and find out what (or who) has really been
 trapped inside.
 
 **Play it:** https://prashaantm.github.io/textEscapeRoom/
@@ -10,13 +10,13 @@ trapped inside.
 
 | # | Sector | Mechanic |
 |---|--------|----------|
-| 0 | Boot-Up | A classic text-adventure command line — explore, read files, find hidden ones, and crack a keypad. |
+| 0 | Boot-Up | A classic text-adventure command line: explore, read files, find hidden ones, and crack a keypad. |
 | 1 | Arcade Zero | A Simon-style memory game with arcade lives and continues. |
-| 2 | Breaker Ward | A "Lights Out" logic grid — every toggle flips its neighbors too. |
+| 2 | Breaker Ward | A "Lights Out" logic grid where every toggle flips its neighbors too. |
 | 3 | Vault Breach | A Fallout-style password-cracking terminal with a Mastermind twist. |
 | 4 | The Core | Assemble everything you've collected into a final access code. |
 
-Clearing all five leads into a proper ending sequence — not just a "You Win"
+Clearing all five leads into a proper ending sequence, not just a "You Win"
 screen.
 
 ## Tech

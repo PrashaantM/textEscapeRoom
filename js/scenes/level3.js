@@ -105,7 +105,7 @@ export default {
       setTimeout(() => {
         showInterstitial(container.querySelector('.level3-scene'), {
           levelIndex: 2,
-          storyBeat: 'ECHO: "Power restored. I can feel that hallway again -- it used to lead to the records room."',
+          storyBeat: 'ECHO: "Power restored. I can feel that hallway again. It used to lead to the records room."',
           shardDigit: digit,
           ctaLabel: 'NEXT SECTOR ▶',
           onContinue: () => ctx.goTo('level4'),

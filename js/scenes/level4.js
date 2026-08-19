@@ -113,11 +113,11 @@ export default {
       renderHud();
       sfx.select();
       if (word === passkey) {
-        logLine(`> ${word} — 6/6 CORRECT`, 'vault-hit');
+        logLine(`> ${word} :: 6/6 CORRECT`, 'vault-hit');
         win();
         return;
       }
-      logLine(`> ${word} — ${matches}/6 CORRECT`);
+      logLine(`> ${word} :: ${matches}/6 CORRECT`);
       sfx.error();
       shake(noiseBox);
       if (attemptsLeft <= 0) {
@@ -152,7 +152,7 @@ export default {
     }
 
     async function lockout() {
-      lockMsg.textContent = 'TERMINAL LOCKED — REROUTING...';
+      lockMsg.textContent = 'TERMINAL LOCKED. REROUTING...';
       glitchBurst(frame, 500);
       sfx.glitch();
       noiseBox.querySelectorAll('button').forEach((b) => (b.disabled = true));

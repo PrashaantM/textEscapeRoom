@@ -23,7 +23,7 @@ function triggerKonami() {
   sfx.coin();
   document.body.classList.add('konami-pulse');
   setTimeout(() => document.body.classList.remove('konami-pulse'), 1500);
-  if (!already) showToast('CHEAT CODE ACCEPTED — 30 LIVES... just kidding. But ECHO noticed that.');
+  if (!already) showToast('CHEAT CODE ACCEPTED. 30 LIVES... just kidding. But ECHO noticed that.');
 }
 
 function showToast(message) {
