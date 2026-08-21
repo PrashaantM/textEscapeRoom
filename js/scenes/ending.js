@@ -147,7 +147,6 @@ export default {
           ...achievements.map((a) => el('p', { class: 'credits-line small' }, a)),
           el('h3', { class: 'credits-heading' }, 'CREDITS'),
           el('p', { class: 'credits-line' }, 'GAME DESIGN & CODE: PRASHAANT M'),
-          el('p', { class: 'credits-line' }, `STARRING: ${state.playerTag || 'GUEST'}`),
           el('p', { class: 'credits-line' }, 'VOICE OF ECHO: YOUR IMAGINATION'),
           el('p', { class: 'credits-line' }, 'SPECIAL THANKS: every dusty floppy disk'),
           el('p', { class: 'credits-line' }, 'ORIGINALLY: textEscapeRoom (pygame, 2024)'),

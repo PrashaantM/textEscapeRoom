@@ -479,18 +479,49 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
    Shared: split room/terminal layout (Sectors 0, 1, 2, 3)
    ======================================================================== */
 
-/* True half/half split: room visual on one side, terminal on the other.
-   flex-wrap lets narrow desktop windows stack instead of overflowing. */
+/* True full-bleed half/half split: room visual fills the left half of the
+   screen, terminal the right half, edge to edge, top to bottom (breaking
+   out of #app's centered/padded column via the negative-margin trick so
+   neither side leaves unused margin around it). Falls back to a stacked
+   layout below 900px where a true 50/50 split would be too cramped. */
 .split-scene {
-  width: min(96vw, 1100px);
+  position: relative; /* containing block for the .interstitial overlay */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-top: -1.25rem;
+  margin-bottom: -3rem;
+  min-height: calc(100vh - 64px);
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 1.25rem;
+  align-items: stretch;
+  gap: 0;
 }
-.split-scene > .room-scene { flex: 1 1 420px; max-width: 520px; }
-.split-scene > .term-frame { flex: 1 1 420px; max-width: 560px; width: auto; margin: 0; }
+.split-scene > .room-scene { flex: 1 1 50%; max-width: 50%; }
+.split-scene > .term-frame {
+  flex: 1 1 50%;
+  max-width: 50%;
+  width: auto;
+  margin: 0;
+  border-radius: 0;
+  border-width: 0 0 0 2px;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 64px);
+}
+.split-scene > .term-frame .term-body { flex: 1; min-height: 0; }
+.split-scene > .term-frame .term-log { flex: 1; height: auto; max-height: none; }
+
+@media (max-width: 900px) {
+  .split-scene {
+    flex-wrap: wrap;
+    min-height: 0;
+  }
+  .split-scene > .room-scene, .split-scene > .term-frame {
+    flex: 1 1 100%;
+    max-width: 100%;
+    min-height: 60vh;
+  }
+  .split-scene > .term-frame { border-width: 2px 0 0; min-height: 0; }
+}
 
 /* non-interactive set-dressing dropped into a room-scene for atmosphere */
 .room-decor { display: flex; align-items: center; opacity: 0.85; }
@@ -526,6 +557,146 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 }
 .terminal-popup-title { margin: 0; color: var(--accent, #39ff14); font-size: 0.95rem; }
 .terminal-popup-files { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+
+/* ---- roomKit.js: the free-roam room canvas shared by Sectors 0-3 ----
+   Overrides the older flex-wrap .room-scene layout with a full-size,
+   position:relative canvas so decor/hotspots/the player can be placed at
+   percentage coordinates, like a real scene rather than a row of icons. */
+.room-scene--free {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+  padding: 0;
+  overflow: hidden;
+  display: block;
+}
+.room-decor-layer, .room-hotspot-layer { position: absolute; inset: 0; }
+.room-decor-layer { pointer-events: none; }
+.room-decor-layer canvas { position: absolute; transform: translate(-50%, -50%); image-rendering: pixelated; opacity: 0.8; }
+
+.room-hotspot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  color: var(--fg-dim);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 0.3rem;
+  background: rgba(5, 7, 10, 0.25);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.room-hotspot canvas { image-rendering: pixelated; filter: drop-shadow(0 0 6px rgba(57, 255, 20, 0.3)); }
+.room-hotspot:hover, .room-hotspot:focus-visible { border-color: var(--accent, #39ff14); background: rgba(57, 255, 20, 0.1); }
+.room-hotspot--active { border-color: var(--accent, #39ff14); }
+
+.room-player {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  transition: left 0.5s linear, top 0.5s linear;
+  z-index: 5;
+  /* Purely a visual marker — never eat clicks meant for a hotspot it's
+     standing next to or in front of (e.g. the keycard inside an open box
+     right where the player just walked to). */
+  pointer-events: none;
+}
+.room-player canvas { image-rendering: pixelated; filter: drop-shadow(0 0 5px var(--accent, #39ff14)); animation: playerBob 2.2s ease-in-out infinite; }
+.room-player--walking canvas { animation: none; }
+.room-player--jump { transition: none; }
+.room-player--flip canvas { transform: scaleX(-1); }
+@media (prefers-reduced-motion: reduce) {
+  .room-player { transition: none; }
+  .room-player canvas { animation: none; }
+}
+
+.room-bubble {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 3.2rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background: var(--bg-panel);
+  border: 2px solid var(--accent, #39ff14);
+  border-radius: 8px;
+  padding: 0.5rem;
+  z-index: 6;
+  min-width: 9rem;
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.5);
+}
+.room-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -0.55rem;
+  transform: translateX(-50%);
+  border: 0.3rem solid transparent;
+  border-top-color: var(--accent, #39ff14);
+}
+.room-bubble-btn {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  color: var(--accent, #39ff14);
+  background: rgba(57, 255, 20, 0.08);
+  border: 1px solid var(--accent, #39ff14);
+  border-radius: 3px;
+  padding: 0.3rem 0.6rem;
+  white-space: nowrap;
+}
+.room-bubble-btn:hover, .room-bubble-btn:focus-visible { background: var(--accent, #39ff14); color: #05070a; }
+
+/* ---- roomKit.js: visual inventory overlay ---- */
+.inventory-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: rgba(5, 7, 10, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.inventory-panel {
+  width: min(100%, 420px);
+  max-height: 85%;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: 2px solid var(--accent, #39ff14);
+  border-radius: 8px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.inventory-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  color: var(--accent, #39ff14);
+}
+.inventory-close { font-size: 1.1rem; color: var(--fg-dim); }
+.inventory-close:hover { color: var(--danger); }
+.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 0.6rem; }
+.inventory-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--fg-dim);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.3rem;
+  background: var(--bg-panel-2);
+}
+.inventory-item canvas { image-rendering: pixelated; }
+.inventory-item:hover, .inventory-item:focus-visible { border-color: var(--accent, #39ff14); color: var(--accent, #39ff14); }
+.inventory-empty { color: var(--fg-dim); text-align: center; font-style: italic; }
 
 /* ========================================================================
    Level 1: terminal parser
@@ -676,6 +847,73 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .arcade-instructions { font-family: var(--font-mono); font-size: 1.05rem; color: var(--fg-dim); max-width: 420px; }
 .ascii-glitch { color: var(--danger); font-size: 1.1rem; }
 
+/* ---- Sector 1 room dressing: sparking wires + the one flickering
+   working terminal, each on its own randomized timing so a room full of
+   them doesn't pulse in unison ---- */
+@keyframes sparkBlink {
+  0%, 91%, 100% { opacity: 0; }
+  93%, 97% { opacity: 1; }
+}
+.spark-wire { position: relative; }
+.spark-wire::after {
+  content: '⚡';
+  position: absolute;
+  top: -0.3em;
+  left: 55%;
+  color: #ffe066;
+  font-size: 0.9em;
+  text-shadow: 0 0 6px #ffe066;
+  animation: sparkBlink 2.6s steps(1, end) infinite;
+}
+.spark-wire:nth-of-type(3n)::after { animation-duration: 3.4s; animation-delay: 0.6s; }
+.spark-wire:nth-of-type(3n+1)::after { animation-duration: 2.1s; animation-delay: 1.1s; }
+
+@keyframes flickerStatic {
+  0%, 55% { filter: grayscale(1) brightness(0.7); }
+  58%, 62% { filter: grayscale(0) brightness(1.3) saturate(2); }
+  65%, 100% { filter: grayscale(1) brightness(0.7); }
+}
+.flicker-terminal canvas { animation: flickerStatic 4s ease-in-out infinite; }
+.flicker-terminal:nth-of-type(2n) canvas { animation-duration: 4.6s; animation-delay: 0.8s; }
+.flicker-terminal:nth-of-type(3n) canvas { animation-duration: 3.3s; animation-delay: 1.6s; }
+@media (prefers-reduced-motion: reduce) {
+  .spark-wire::after, .flicker-terminal canvas { animation: none; }
+}
+
+.room-hotspot--malfunction canvas { filter: drop-shadow(0 0 6px rgba(255, 176, 0, 0.5)); }
+
+/* room-to-room transition wipe used by Sector 1's door crossings */
+@keyframes roomWipe {
+  0% { opacity: 1; }
+  45% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.room-scene--transition { animation: roomWipe 0.5s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .room-scene--transition { animation: none; }
+}
+
+/* ---- Sector 1's second minigame: PETRI DASH (simultaneous-reaction, as
+   opposed to ARCADE ZERO's sequence-memory) ---- */
+.petri-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 84px);
+  grid-template-rows: repeat(3, 84px);
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 1rem auto;
+}
+.petri-dish {
+  border-radius: 50%;
+  border: 3px solid #2f9e5b;
+  background: color-mix(in srgb, #2f9e5b 10%, #0c1116);
+  transition: transform 0.05s ease;
+}
+.petri-dish:hover:not(.petri-lit) { filter: brightness(1.25); box-shadow: 0 0 12px #2f9e5b; }
+.petri-dish:active { transform: scale(0.94); }
+.petri-dish.petri-lit { background: #2f9e5b; box-shadow: 0 0 24px #2f9e5b; }
+.petri-dish.petri-hit { background: #4cd6ff; border-color: #4cd6ff; box-shadow: 0 0 24px #4cd6ff; }
+
 /* ========================================================================
    Level 3: breaker ward
    ======================================================================== */
@@ -693,8 +931,51 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .cell--off { background: #1a1508; }
 .cell--on { background: #ffb000; box-shadow: 0 0 14px #ffb000; border-color: #ffb000; }
 .cell:hover { filter: brightness(1.3); box-shadow: 0 0 10px rgba(255, 176, 0, 0.45); }
-.breaker-controls { display: flex; justify-content: center; }
+.breaker-controls { display: flex; justify-content: center; gap: 0.6rem; }
 .ambient-line { text-align: center; color: var(--fg-dim); font-style: italic; min-height: 1.4em; font-size: 1.05rem; }
+.cell--hint { box-shadow: 0 0 0 3px #fff inset, 0 0 14px #fff; animation: pulseGlow 0.6s ease infinite; }
+.breaker-timer { text-align: center; font-family: var(--font-display); font-size: 0.85rem; color: var(--danger); }
+.breaker-locked-msg { text-align: center; color: var(--fg-dim); font-style: italic; padding: 2rem 1rem; }
+
+/* ---- Sector 2 room: rising flood water + the 25 mirrored wall lights ---- */
+.flood-water {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 0%;
+  background: linear-gradient(to bottom, rgba(76, 214, 255, 0.28), rgba(76, 214, 255, 0.5));
+  border-top: 2px solid rgba(76, 214, 255, 0.6);
+  transition: height 1s linear;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes waterRipple {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-1.5%); }
+}
+.flood-water::before {
+  content: '';
+  position: absolute;
+  inset: 0 -2% auto -2%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.25);
+  animation: waterRipple 3s ease-in-out infinite;
+}
+.panel-lights {
+  position: absolute;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+  width: 8%;
+  aspect-ratio: 1;
+  z-index: 1;
+  pointer-events: none; /* decorative mirror of the puzzle grid, never a click target */
+}
+.panel-light { border-radius: 1px; background: #2a2210; border: 1px solid #4a3200; }
+.panel-light.panel-light--on { background: #ffb000; box-shadow: 0 0 5px #ffb000; }
+@media (prefers-reduced-motion: reduce) {
+  .flood-water::before { animation: none; }
+  .cell--hint { animation: none; }
+}
 
 /* ========================================================================
    Level 4: vault breach
@@ -726,6 +1007,44 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 }
 .noise-token:hover:not(:disabled) { background: rgba(0, 255, 156, 0.2); }
 .noise-token.used { color: #4a6a5c; text-decoration: line-through; }
+/* Deliberately the same color as .noise-text: these two clue tokens must
+   blend into the surrounding garbage rather than visually announce
+   themselves — the player has to actually read the noise to find them. */
+.noise-token.noise-token--blend { color: #1c8a56; font-weight: normal; }
+
+/* ---- Sector 3: laptop-style QWERTY keyboard (not A-Z alphabetical) ---- */
+.qwerty-keyboard { display: flex; flex-direction: column; gap: 0.35rem; align-items: center; margin: 0.4rem 0; }
+.qwerty-row { display: flex; gap: 0.3rem; }
+.qwerty-key { width: 38px; height: 38px; font-size: 1rem; border: 2px solid var(--border); border-radius: 4px; background: var(--bg-panel-2); }
+.qwerty-key:hover { border-color: #00ff9c; color: #00ff9c; }
+
+/* ---- Sector 3: riddles panel, vault-hub locks, and the caught overlay ---- */
+.vault-riddles { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.4rem 0; }
+.vault-riddle { font-size: 1rem; color: var(--fg-dim); font-style: italic; border-left: 2px solid #00ff9c; padding-left: 0.6rem; }
+.vault-timer { text-align: center; font-family: var(--font-display); font-size: 0.85rem; color: var(--danger); }
+.vault-tries { text-align: center; color: var(--fg-dim); font-size: 0.95rem; }
+
+@keyframes lockFall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(40px) rotate(35deg); opacity: 0; }
+}
+.room-lock--falling { animation: lockFall 0.6s ease-in forwards; }
+
+.security-caught {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(20, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  text-align: center;
+  font-family: var(--font-display);
+  color: var(--danger);
+  font-size: 1rem;
+}
 
 .vault-log { max-height: 30vh; overflow-y: auto; font-size: 1.05rem; }
 .vault-log-line { margin: 0.15rem 0; }
