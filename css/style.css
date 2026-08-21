@@ -644,13 +644,42 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
    contact-shadow gradient hugging both wall bases. */
 .room-floor {
   left: 0; top: 62cqh;
-  width: 100cqw; height: 95cqmin;
+  /* Height is deliberately more than the 95cqmin the hinge is anchored
+     back by (below): the hinge's screen position only depends on the
+     translateZ shift, not this height, so the extra reach here just lets
+     the floor's near edge come far enough toward the camera to fill all
+     the way to the bottom of the room instead of stopping partway down. */
+  width: 100cqw; height: 160cqmin;
   transform-origin: top center;
-  transform: rotateX(90deg);
+  /* rotateX(90deg) alone leaves the floor's hinge (its near/horizon edge)
+     sitting at Z:0 — screen-plane depth — while the walls sit back at
+     Z:-95cqmin (see .room-wall-back/.room-wall-side above), so despite
+     sharing the same on-screen horizon line, the hinge and the wall base
+     were never actually at the same 3D point: perspective projected them
+     to different screen positions, opening a gap. translateZ(-95cqmin),
+     composed outermost here (CSS applies the rightmost function first, so
+     this runs *after* the rotation, in the already-rotated frame) shifts
+     the whole rotated plane back by the same 95cqmin the walls sit at, so
+     the hinge now lands exactly on the wall base, with the extra height
+     above reaching the near edge far enough forward (past screen-plane
+     depth) to fill the room down to its front edge. */
+  transform: translateZ(-95cqmin) rotateX(90deg);
+  /* The hinge — right where this needs to visibly meet the wall base — sits
+     at the most heavily foreshortened end of the plane (see the translateZ
+     comment above), which shrinks this tile pattern's 5.5cqmin repeat down
+     to a near-illegible sliver there; the two tile colors were also close
+     enough to the room's near-black ambient background (#05070a) that the
+     whole blurred result read as empty void rather than shaded floor.
+     Lighter, higher-contrast tile colors keep that region legibly "floor"
+     without changing anything about where the plane actually sits. */
   background-image:
-    repeating-linear-gradient(45deg, #0a0f12 0 5.5cqmin, #060a0c 5.5cqmin 5.7cqmin),
+    repeating-linear-gradient(45deg, #161f24 0 5.5cqmin, #0e161a 5.5cqmin 5.7cqmin),
     repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.12) 0 5.5cqmin, transparent 5.5cqmin 5.7cqmin),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, transparent 14%),
+    /* A light contact-shadow right at the hinge, not the near-black wash
+       this was before the plane got taller (see above) — at this box's
+       new height, the old 0%-14% band darkened enough of the near-wall
+       area to read as an empty gap instead of shaded floor. */
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.35) 0%, transparent 8%),
     linear-gradient(to right, rgba(0, 0, 0, 0.4) 0%, transparent 10%);
   background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%;
 }
