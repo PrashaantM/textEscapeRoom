@@ -13,9 +13,12 @@
 import { completeLevel, getState } from '../state.js';
 import { sfx } from '../audio.js';
 import { shake, glitchBurst } from '../fx.js';
-import { el, delay, randInt } from '../utils.js';
+import { el, delay, randInt, sample } from '../utils.js';
 import { terminalFrame, showInterstitial } from './shared.js';
-import { drawDoor, drawConduit, drawAquariumTank, drawPlantProp, drawCrateStack } from '../sprites.js';
+import {
+  drawDoor, drawConduit, drawAquariumTank, drawPlantProp, drawCrateStack,
+  drawElectricalBox, drawVentProp,
+} from '../sprites.js';
 import { createRoom } from './roomKit.js';
 
 const SIZE = 5;
@@ -63,29 +66,53 @@ function generate() {
   return { grid, solutionCells };
 }
 
-function techTanksDecor() {
+const CONDUIT_LINES = [
+  'A ceiling pipe, dripping despite the flood clock not moving fast enough to explain it.',
+  'Warm to the touch. Whatever runs through it, it hasn’t stopped yet.',
+  'Rattles when the water rises. You leave it alone.',
+];
+
+// Every tank, pipe, and crate is a walkable, clickable hotspot with a
+// flavor line, split to match the room's wall/floor backdrop
+// (roomKit.js's ROOM_HORIZON/ROOM_CORNER): ceiling pipes and the odd wall
+// fixture sit above y=50, on either the left wall (x<16) or back wall
+// (x>16); the five aquarium tanks, being freestanding, sit below y=66.
+function wardProps() {
   return [
-    { x: 12, y: 30, node: drawAquariumTank('#2f9e5b', 11) },
-    { x: 12, y: 68, node: drawAquariumTank('#4cd6ff', 11) },
-    { x: 82, y: 22, node: drawAquariumTank('#2f9e5b', 10) },
-    { x: 82, y: 52, node: drawAquariumTank('#4cd6ff', 10) },
-    { x: 82, y: 82, node: drawAquariumTank('#2f9e5b', 10) },
-    ...Array.from({ length: 10 }, (_, i) => ({
-      x: 5 + i * 10, y: 4, node: drawConduit('#ffb000', 6),
+    // ---- wall/ceiling-mounted ----
+    ...Array.from({ length: 8 }, (_, i) => ({
+      id: `conduit${i}`, x: 12 + i * 10, y: 6, node: () => drawConduit('#ffb000', 6),
+      label: 'Ceiling pipe', desc: sample(CONDUIT_LINES, 1)[0],
     })),
+    { id: 'ebox', x: 8, y: 30, node: () => drawElectricalBox(7), label: 'Electrical box', desc: 'Breakers, all dark. This whole ward lost power at once.' },
+    { id: 'vent', x: 90, y: 34, node: () => drawVentProp(6), label: 'Vent grate', desc: 'Water beads on the grille and drips through, slow and steady.' },
+    // ---- floor: 5 tanks ----
+    { id: 'tank1', x: 10, y: 74, node: () => drawAquariumTank('#2f9e5b', 10), label: 'Aquarium tank', desc: 'Algae-green water. Something small darts away from the glass.' },
+    { id: 'tank2', x: 10, y: 92, node: () => drawAquariumTank('#4cd6ff', 10), label: 'Aquarium tank', desc: 'Cracked at the base. This one’s already leaking into the flood.' },
+    { id: 'tank3', x: 88, y: 72, node: () => drawAquariumTank('#2f9e5b', 10), label: 'Aquarium tank', desc: 'Empty. Whatever lived here got out before you did.' },
+    { id: 'tank4', x: 88, y: 92, node: () => drawAquariumTank('#4cd6ff', 9), label: 'Aquarium tank', desc: 'A feeding label, faded past reading.' },
+    { id: 'tank5', x: 50, y: 94, node: () => drawAquariumTank('#2f9e5b', 9), label: 'Aquarium tank', desc: 'Bubbles still rise from a filter that shouldn’t still be running.' },
   ];
 }
 
-function plantsDecor() {
+const DECOY_ROOM_LINES = [
+  'Just dust and leaf litter this far in.',
+  'Something skitters away as you get close.',
+  'Nothing here but green, growing over everything.',
+];
+
+function plantsProps() {
   return [
-    { x: 15, y: 30, node: drawPlantProp(9) },
-    { x: 30, y: 55, node: drawPlantProp(8) },
-    { x: 12, y: 78, node: drawPlantProp(9) },
-    { x: 70, y: 35, node: drawPlantProp(9) },
-    { x: 85, y: 60, node: drawPlantProp(8) },
-    { x: 55, y: 80, node: drawPlantProp(9) },
-    { x: 45, y: 25, node: drawCrateStack('#5e7a4a', 7) },
-    { x: 65, y: 65, node: drawCrateStack('#5e7a4a', 7) },
+    { id: 'plant1', x: 10, y: 76, node: () => drawPlantProp(9), label: 'Overgrown plant', desc: sample(DECOY_ROOM_LINES, 1)[0] },
+    { id: 'plant2', x: 88, y: 78, node: () => drawPlantProp(8), label: 'Overgrown plant', desc: sample(DECOY_ROOM_LINES, 1)[0] },
+    { id: 'plant3', x: 32, y: 90, node: () => drawPlantProp(9), label: 'Overgrown plant', desc: sample(DECOY_ROOM_LINES, 1)[0] },
+    { id: 'plant4', x: 68, y: 92, node: () => drawPlantProp(8), label: 'Overgrown plant', desc: sample(DECOY_ROOM_LINES, 1)[0] },
+    { id: 'crate1', x: 22, y: 70, node: () => drawCrateStack('#5e7a4a', 7), label: 'Crate stack', desc: 'Split open, roots growing straight through the slats.' },
+    {
+      id: 'crate2', x: 78, y: 68, node: () => drawCrateStack('#5e7a4a', 7), label: 'Crate stack',
+      desc: 'Someone tucked something in here before the flood ever started.',
+      pickup: { label: 'RUSTED KEYRING', flavor: 'No keys left on it. You keep it anyway.' },
+    },
   ];
 }
 
@@ -107,9 +134,17 @@ export default {
 
     const room = createRoom({ accent: '#ffb000', ariaLabel: 'Sector 2 flooding ward' });
     const waterEl = el('div', { class: 'flood-water' });
-    const panelLightsEl = el('div', { class: 'panel-lights', style: 'left: 45%; top: 12%;' });
+    // A physical breaker-panel casing bolted to the back wall, mirroring
+    // the puzzle grid live — styled as its own object (riveted frame,
+    // round status LEDs, a label plate) rather than a bare copy of the
+    // flat-square puzzle widget on the right.
+    const panelLightsEl = el('div', { class: 'panel-lights' });
     for (let i = 0; i < 25; i++) panelLightsEl.appendChild(el('div', { class: 'panel-light' }));
-    room.el.append(waterEl, panelLightsEl);
+    const panelLightsFrame = el('div', { class: 'panel-lights-frame', style: 'left: 50%; top: 14%; transform: translateX(-50%);' }, [
+      panelLightsEl,
+      el('span', { class: 'panel-lights-label' }, 'PWR PANEL'),
+    ]);
+    room.el.append(waterEl, panelLightsFrame);
 
     const frame = terminalFrame({ title: 'SECTOR 2 // BREAKER WARD', accent: '#ffb000' });
     const body = frame.querySelector('.term-body');
@@ -226,16 +261,58 @@ export default {
       startClock();
     }
 
+    // Computed once (not per-render): renderRoom() is called again when
+    // the door is first reached, and re-generating these would lose the
+    // one pickup's .taken flag along with everything else's identity.
+    const wardPropDefs = wardProps();
+
     // ---- the room: a straight path to the door; reaching it for the
-    // first time powers the breaker panel on (unlocking the puzzle). ----
+    // first time powers the breaker panel on (unlocking the puzzle). Every
+    // tank and pipe along the way is also a walkable, clickable hotspot —
+    // see wardProps() — none of it gates reaching the door. ----
     function renderRoom() {
-      room.setDecor(techTanksDecor());
+      wardPropDefs.forEach((def) => {
+        room.setHotspot(def.id, { x: def.x, y: def.y, build: () => [def.node()], label: def.label, onClick: () => onPropClick(def) });
+      });
       room.setHotspot('door', {
-        x: 92, y: 55,
+        x: 92, y: 58,
         build: () => [drawDoor(!doorReached, 8), el('span', {}, doorReached ? 'PANEL: LIVE' : 'DOOR')],
         label: doorReached ? 'Door, panel powered' : 'Door at the end of the path',
         onClick: onDoorClick,
       });
+    }
+
+    // ---- optional set dressing: walk up, print a flavor line; one
+    // pickup per room is purely narrative (there's no inventory panel in
+    // this sector). Shared by both rooms in this scene. ----
+    async function onPropClick(def) {
+      await room.walkTo(def.id);
+      if (room.getActive() !== def.id) return;
+      if (def.pickup && !def.pickup.taken) {
+        room.showBubble([
+          { label: 'LOOK', onClick: () => { room.hideBubble(); logAmbient(def.desc); } },
+          { label: `TAKE ${def.pickup.label}`, onClick: () => { room.hideBubble(); takeProp(def); } },
+        ]);
+      } else {
+        logAmbient(def.desc);
+      }
+    }
+    async function takeProp(def) {
+      def.pickup.taken = true;
+      sfx.select();
+      logAmbient(`You pocket the ${def.pickup.label.toLowerCase()}. ${def.pickup.flavor}`);
+    }
+    // Props print into whichever pane is currently showing (the locked
+    // message, the puzzle, or the plant room's intro) rather than a
+    // dedicated log, so a one-line ambientLine footer under that pane is
+    // reused for all of it.
+    function logAmbient(text) {
+      let line = puzzlePane.querySelector('.ambient-line');
+      if (!line) {
+        line = el('p', { class: 'ambient-line' });
+        puzzlePane.appendChild(line);
+      }
+      line.textContent = text;
     }
 
     async function onDoorClick() {
@@ -271,11 +348,13 @@ export default {
       // Fresh, dry room: swap out decor + hotspots for the plant-filled
       // escape room, entering near the bottom with the exit up top.
       room.el.querySelector('.flood-water')?.remove();
-      room.el.querySelector('.panel-lights')?.remove();
+      room.el.querySelector('.panel-lights-frame')?.remove();
       room.clearHotspots();
-      room.setDecor(plantsDecor());
+      plantsProps().forEach((def) => {
+        room.setHotspot(def.id, { x: def.x, y: def.y, build: () => [def.node()], label: def.label, onClick: () => onPropClick(def) });
+      });
       room.setHotspot('exit-door', {
-        x: 50, y: 10,
+        x: 50, y: 14,
         build: () => [drawDoor(false, 8), el('span', {}, 'DOOR')],
         label: 'Exit door',
         onClick: onExitClick,

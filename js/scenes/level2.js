@@ -31,69 +31,39 @@ const PADS = [
   { dir: 'left', label: '◀', color: '#9dff5c', freq: 293.66, key: 'ArrowLeft' },
 ];
 
-// Fixed background dressing for the tech bay: sparking wires, cracked
-// pods, dead terminals, cabinets, and now a cluster of bulkier machinery
-// (panels, screens, crates) crowded around the pink terminal itself, so
-// it reads as one more thing buried in the clutter instead of the one
-// obvious object standing alone in an empty room. Percentage coordinates.
-function techDecor() {
-  return [
-    { x: 10, y: 15, node: el('div', { class: 'spark-wire' }, [drawSparkWire(7)]) },
-    { x: 55, y: 10, node: el('div', { class: 'spark-wire' }, [drawSparkWire(7)]) },
-    { x: 30, y: 88, node: el('div', { class: 'spark-wire' }, [drawSparkWire(6)]) },
-    { x: 88, y: 20, node: el('div', { class: 'spark-wire' }, [drawSparkWire(6)]) },
-    { x: 20, y: 40, node: drawGlassPod('#ff8a8a', 8) },
-    { x: 65, y: 42, node: drawGlassPod('#ff8a8a', 7) },
-    { x: 8, y: 70, node: drawGlassPod('#ff8a8a', 7) },
-    { x: 92, y: 65, node: drawBrokenTerminal(7) },
-    { x: 40, y: 20, node: drawBrokenTerminal(6) },
-    { x: 15, y: 92, node: drawCabinet('#ff2fd0', 6, undefined, 2) },
-    { x: 85, y: 90, node: drawCabinet('#ff2fd0', 6, undefined, 3) },
-    { x: 48, y: 65, node: drawVentProp(6) },
-    { x: 70, y: 88, node: drawVentProp(6) },
-    { x: 38, y: 30, node: drawMultiscreen(6) },
-    { x: 62, y: 28, node: drawCrateProp(false, 6) },
-    { x: 40, y: 44, node: drawCrateProp(true, 6) },
-    { x: 60, y: 46, node: drawElectricalBox(6) },
-  ];
-}
-
-// Fixed background dressing for the bio bay: cracked bio-tanks, lab
-// flasks, and plants standing in for overgrowth, mirroring the tech bay's
-// layout with a green/blue palette instead, and the same trick of
-// clutter deliberately crowding the blue terminal.
-function bioDecor() {
-  return [
-    { x: 12, y: 18, node: drawGlassPod('#4cd6ff', 8) },
-    { x: 60, y: 14, node: drawGlassPod('#2f9e5b', 7) },
-    { x: 88, y: 30, node: drawGlassPod('#4cd6ff', 7) },
-    { x: 25, y: 60, node: drawLabFlask('#2f9e5b', 7) },
-    { x: 45, y: 75, node: drawLabFlask('#4cd6ff', 6) },
-    { x: 70, y: 60, node: drawLabFlask('#2f9e5b', 6) },
-    { x: 8, y: 88, node: drawPlantProp(7) },
-    { x: 92, y: 88, node: drawPlantProp(7) },
-    { x: 50, y: 92, node: drawPlantProp(6) },
-    { x: 35, y: 30, node: drawBrokenTerminal(6) },
-    { x: 90, y: 65, node: drawVentProp(6) },
-    { x: 38, y: 44, node: drawLabDesk(6) },
-    { x: 62, y: 46, node: drawCrateProp(false, 6) },
-    { x: 42, y: 26, node: drawMultiscreen(6) },
-  ];
-}
-
-// Extra clickable-but-optional set dressing, on top of the two working
-// terminals and the doors — walk up, get a line of flavor, nothing here
-// gates clearing the sector. One item per room is also a (purely narrative,
-// never inventoried) pickup, so the rooms don't feel completely empty of
-// things to poke at. Positioned apart from the decor above so nothing
-// double-stacks a hotspot on top of non-clickable set dressing.
+// Every piece of set dressing in both rooms is a walkable, clickable
+// hotspot with its own flavor line — nothing here is purely decorative
+// anymore. Positions are split to match the room's wall/floor backdrop
+// (roomKit.js's ROOM_HORIZON/ROOM_CORNER): wall-mounted fixtures (wiring,
+// screens, panels, vents) sit above y=55 on the left wall (x<16) or back
+// wall (x>16); freestanding stuff (pods, terminals, cabinets, crates,
+// chairs) sits below y=66, on the floor. Also deliberately crowds the
+// tech bay's pink terminal and the bio bay's blue terminal with clutter
+// so neither one is the one obvious object standing alone in an empty
+// room. One item per room is also a (purely narrative, never used for
+// anything) pickup.
 function techProps() {
   return [
-    { id: 'tp-panel', x: 30, y: 55, node: () => drawControlPanel('#ff2fd0', 7), label: 'Control panel', desc: "The panel spits sparks whenever the base current shifts. You don't touch it twice." },
-    { id: 'tp-ebox', x: 70, y: 55, node: () => drawElectricalBox(7), label: 'Electrical box', desc: 'Breakers labeled A through F. All of them are already tripped.' },
-    { id: 'tp-chair', x: 22, y: 78, node: () => drawChairProp(6), label: 'Overturned chair', desc: "Overturned. Nobody's sat in it for a while." },
+    // ---- wall-mounted ----
+    { id: 'tp-wire-1', x: 10, y: 10, node: () => el('div', { class: 'spark-wire' }, [drawSparkWire(7)]), label: 'Sparking wire bundle', desc: 'Exposed wiring, arcing every few seconds. You keep your hands in your pockets.' },
+    { id: 'tp-wire-2', x: 55, y: 8, node: () => el('div', { class: 'spark-wire' }, [drawSparkWire(7)]), label: 'Sparking wire bundle', desc: "More exposed wiring. Whatever this used to power, it isn't anymore." },
+    { id: 'tp-wire-3', x: 88, y: 14, node: () => el('div', { class: 'spark-wire' }, [drawSparkWire(6)]), label: 'Sparking wire bundle', desc: 'A wire bundle, sparking weakly. Nearly spent.' },
+    { id: 'tp-multiscreen', x: 38, y: 20, node: () => drawMultiscreen(6), label: 'Dead screens', desc: 'Six dead screens. Whatever they used to monitor stopped being interesting first.' },
+    { id: 'tp-ebox', x: 70, y: 22, node: () => drawElectricalBox(6), label: 'Electrical box', desc: 'Breakers, all flipped the wrong way. Not worth resetting.' },
+    { id: 'tp-vent-1', x: 22, y: 34, node: () => drawVentProp(6), label: 'Vent grate', desc: 'A vent grate, ticking behind the grille.' },
+    { id: 'tp-vent-2', x: 78, y: 36, node: () => drawVentProp(6), label: 'Vent grate', desc: 'Warm air bleeds out. Something back there still runs.' },
+    { id: 'tp-panel', x: 15, y: 48, node: () => drawControlPanel('#ff2fd0', 7), label: 'Control panel', desc: "The panel spits sparks whenever the base current shifts. You don't touch it twice." },
+    // ---- floor ----
+    { id: 'tp-pod-1', x: 14, y: 76, node: () => drawGlassPod('#ff8a8a', 8), label: 'Cracked containment pod', desc: 'The glass is fogged over. You choose not to wonder why.' },
+    { id: 'tp-pod-2', x: 52, y: 90, node: () => drawGlassPod('#ff8a8a', 7), label: 'Cracked containment pod', desc: "Empty, or empty enough that you don't check twice." },
+    { id: 'tp-terminal-dead-1', x: 32, y: 82, node: () => drawBrokenTerminal(7), label: 'Dead terminal', desc: 'Cracked screen, dead for good. Not the one you need.' },
+    { id: 'tp-terminal-dead-2', x: 90, y: 70, node: () => drawBrokenTerminal(6), label: 'Dead terminal', desc: 'Another dead one. This whole bay is mostly corpses.' },
+    { id: 'tp-cabinet-1', x: 6, y: 92, node: () => drawCabinet('#ff2fd0', 6, undefined, 2), label: 'Cabinet', desc: 'Rattles when you lean on it. Empty inside.' },
+    { id: 'tp-cabinet-2', x: 68, y: 94, node: () => drawCabinet('#ff2fd0', 6, undefined, 3), label: 'Cabinet', desc: 'Jammed shut. Not worth the effort.' },
+    { id: 'tp-crate-plain', x: 80, y: 72, node: () => drawCrateProp(false, 6), label: 'Crate', desc: 'Sealed. Heavier than it looks.' },
+    { id: 'tp-chair', x: 24, y: 92, node: () => drawChairProp(6), label: 'Overturned chair', desc: "Overturned. Nobody's sat in it for a while." },
     {
-      id: 'tp-crate', x: 78, y: 78, node: () => drawCrateProp(true, 7), label: 'Cracked crate',
+      id: 'tp-crate-cracked', x: 88, y: 90, node: () => drawCrateProp(true, 7), label: 'Cracked crate',
       desc: 'A cracked crate, packing straw spilling out.',
       pickup: { label: 'SPARE FUSE', flavor: 'A fuse, still good. You pocket it out of habit.' },
     },
@@ -102,11 +72,22 @@ function techProps() {
 
 function bioProps() {
   return [
-    { id: 'bp-desk', x: 30, y: 58, node: () => drawLabDesk(6), label: 'Lab bench', desc: 'A lab bench, covered in notes too smeared to read.' },
-    { id: 'bp-chair', x: 70, y: 58, node: () => drawChairProp(6), label: 'Toppled chair', desc: 'Knocked over mid-shift, by the look of it.' },
-    { id: 'bp-multiscreen', x: 20, y: 78, node: () => drawMultiscreen(6), label: 'Dead screens', desc: 'Six screens, six different kinds of static.' },
+    // ---- wall-mounted ----
+    { id: 'bp-pod-1', x: 12, y: 12, node: () => drawGlassPod('#4cd6ff', 7), label: 'Bio-tank', desc: 'Empty. Whatever it held got out, or was let out.' },
+    { id: 'bp-pod-2', x: 60, y: 10, node: () => drawGlassPod('#2f9e5b', 6), label: 'Bio-tank', desc: 'Green sludge coats the inside glass. You look away.' },
+    { id: 'bp-multiscreen', x: 40, y: 22, node: () => drawMultiscreen(6), label: 'Dead screens', desc: 'Six screens, six different kinds of static.' },
+    { id: 'bp-terminal-dead', x: 85, y: 20, node: () => drawBrokenTerminal(6), label: 'Dead terminal', desc: 'Dead screen, cracked corner to corner. Not the one you need.' },
+    { id: 'bp-vent', x: 20, y: 36, node: () => drawVentProp(6), label: 'Vent grate', desc: 'Something drips behind this one, on a slow, steady rhythm.' },
+    { id: 'bp-desk', x: 72, y: 44, node: () => drawLabDesk(6), label: 'Lab bench', desc: 'A lab bench, covered in notes too smeared to read.' },
+    // ---- floor ----
+    { id: 'bp-pod-3', x: 88, y: 76, node: () => drawGlassPod('#4cd6ff', 8), label: 'Bio-tank', desc: 'This one still hums, faintly. Best not to touch it.' },
+    { id: 'bp-flask-1', x: 26, y: 78, node: () => drawLabFlask('#2f9e5b', 7), label: 'Lab flask', desc: 'Whatever was growing in here isn’t anymore.' },
+    { id: 'bp-flask-2', x: 46, y: 90, node: () => drawLabFlask('#4cd6ff', 6), label: 'Lab flask', desc: 'Cracked clean in half. Empty for a while.' },
+    { id: 'bp-plant-1', x: 6, y: 92, node: () => drawPlantProp(7), label: 'Overgrown plant', desc: 'The only thing in this bay that looks like it’s thriving.' },
+    { id: 'bp-plant-2', x: 94, y: 92, node: () => drawPlantProp(7), label: 'Overgrown plant', desc: 'Roots pushing straight through the floor tile.' },
+    { id: 'bp-chair', x: 62, y: 72, node: () => drawChairProp(6), label: 'Toppled chair', desc: 'Knocked over mid-shift, by the look of it.' },
     {
-      id: 'bp-crate', x: 80, y: 78, node: () => drawCrateProp(true, 7), label: 'Cracked crate',
+      id: 'bp-crate-cracked', x: 82, y: 92, node: () => drawCrateProp(true, 7), label: 'Cracked crate',
       desc: 'A cracked crate. Something inside clinks when you nudge it.',
       pickup: { label: 'CRACKED VIAL', flavor: 'Empty, thankfully. You take it anyway.' },
     },
@@ -144,21 +125,20 @@ export default {
 
     function renderTechRoom(entry) {
       room.clearHotspots();
-      room.setDecor(techDecor());
       room.setHotspot('pink-terminal', {
-        x: 50, y: 35,
+        x: 50, y: 56,
         build: () => [el('div', { class: flags.pinkSolved ? '' : 'flicker-terminal' }, [drawGoodTerminal('#ff2fd0', 8, undefined, flags.pinkSolved)]), el('span', {}, flags.pinkSolved ? 'TERMINAL: ONLINE' : 'TERMINAL')],
         label: flags.pinkSolved ? 'Pink terminal, online' : 'Flickering pink terminal',
         onClick: onPinkTerminalClick,
       });
       room.setHotspot('door-open', {
-        x: 85, y: 55,
+        x: 85, y: 58,
         build: () => [drawDoor(false, 8), el('span', {}, 'DOOR')],
         label: 'Door to the next room',
         onClick: onDoorOpenClick,
       });
       room.setHotspot('door-barricaded', {
-        x: 15, y: 55,
+        x: 15, y: 58,
         // No "BARRICADED" text label — the planks-and-padlock sprite (see
         // sprites.js's drawBarricade) has to read as barricaded on its
         // own, layered right over the door via .door-barricade-wrap
@@ -172,20 +152,19 @@ export default {
       techProps().forEach((def) => {
         room.setHotspot(def.id, { x: def.x, y: def.y, build: () => [def.node()], label: def.label, onClick: () => onPropClick(def) });
       });
-      if (entry) room.placeAt(85, 55);
+      if (entry) room.placeAt(85, 58);
     }
 
     function renderBioRoom(entry) {
       room.clearHotspots();
-      room.setDecor(bioDecor());
       room.setHotspot('blue-terminal', {
-        x: 50, y: 35,
+        x: 50, y: 56,
         build: () => [el('div', { class: flags.blueSolved ? '' : 'flicker-terminal' }, [drawGoodTerminal('#4cd6ff', 8, undefined, flags.blueSolved)]), el('span', {}, flags.blueSolved ? 'TERMINAL: ONLINE' : 'TERMINAL')],
         label: flags.blueSolved ? 'Blue terminal, online' : 'Flickering blue terminal',
         onClick: onBlueTerminalClick,
       });
       room.setHotspot('door-back', {
-        x: 15, y: 55,
+        x: 15, y: 58,
         build: () => [drawDoor(false, 8), el('span', {}, 'DOOR')],
         label: 'Door back to the tech bay',
         onClick: onDoorBackClick,
@@ -193,7 +172,7 @@ export default {
       bioProps().forEach((def) => {
         room.setHotspot(def.id, { x: def.x, y: def.y, build: () => [def.node()], label: def.label, onClick: () => onPropClick(def) });
       });
-      if (entry) room.placeAt(15, 55);
+      if (entry) room.placeAt(15, 58);
     }
 
     // ---- optional set dressing: walk up, print a flavor line; the one

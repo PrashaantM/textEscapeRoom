@@ -21,7 +21,7 @@ import {
   drawPadlock, drawDoor, drawVaultCam, drawPoster, drawPaperPile, drawComputerCubicle,
   drawMonitorSection, drawChairProp, drawMultiscreen, drawControlPanel, drawLockerStuffed,
   drawElectricalBox, drawCrateProp, drawLabDesk, drawLabFlask, drawPlantProp, drawCabinet,
-  drawClosetDoor,
+  drawClosetDoor, drawWallLight,
 } from '../sprites.js';
 import { createRoom, buildInventoryOverlay } from './roomKit.js';
 
@@ -118,7 +118,11 @@ export default {
       el('p', { class: 'level-intro' }, 'A sealed vault, 4 locked doors, and a terminal that has seen better decades. Walk up to the vault to begin.'),
     ]);
     const heistPane = el('div', { hidden: true });
-    body.append(vaultBadge, idlePane, heistPane);
+    // Visible in both the idle and heist views (unlike heistPane's own
+    // `log`), since the hub's own fixtures are clickable from the start,
+    // before the heist even begins.
+    const hubAmbientEl = el('p', { class: 'ambient-line' });
+    body.append(vaultBadge, hubAmbientEl, idlePane, heistPane);
     container.appendChild(el('div', { class: 'level4-scene split-scene' }, [room.el, frame]));
 
     // ---- heist UI: timer, tries, riddles, noise-buried clues, and the
@@ -260,18 +264,18 @@ export default {
       logLine(`CLUE FOUND (${label}): POSITION ${pos + 1} = "${passkey[pos]}"`, 'vault-hint');
     }
 
-    // ---- vault hub room: the vault itself + 4 locked doors ----
-    function renderHub() {
+    // ---- vault hub room: the vault itself + 4 locked doors, all sitting
+    // on the horizon like every other door in the game, plus a handful of
+    // clickable fixtures. `fromId` (passed by a side room's back door) is
+    // which door to re-place the player at, so returning to the hub lands
+    // you back at the exact door you used instead of some fixed spot. ----
+    function renderHub(entry, fromId) {
       room.clearHotspots();
-      room.setDecor([
-        { x: 8, y: 20, node: drawCabinet('#00ff9c', 9, undefined, 2) },
-        { x: 92, y: 20, node: drawCabinet('#00ff9c', 9, undefined, 2) },
-        { x: 10, y: 85, node: drawPlantProp(9) },
-        { x: 90, y: 85, node: drawPlantProp(9) },
-        { x: 50, y: 12, node: drawVaultCam('#00ff9c', 7) },
-      ]);
+      HUB_PROPS.forEach((def) => {
+        room.setHotspot(def.id, { x: def.x, y: def.y, build: () => [def.node()], label: def.label, onClick: () => onHubPropClick(def) });
+      });
       room.setHotspot('vault', {
-        x: 50, y: 55,
+        x: 50, y: 58,
         build: () => [drawDoor(!solved, 10), el('span', {}, solved ? 'VAULT: OPEN' : 'VAULT: SEALED')],
         label: solved ? 'Vault, open' : 'The vault door',
         onClick: onVaultClick,
@@ -286,15 +290,38 @@ export default {
           onClick: () => onSideDoorClick(id),
         });
       });
+      if (entry && fromId) {
+        const meta = doorMeta.find((d) => d.id === fromId);
+        if (meta) room.placeAt(meta.x, meta.y);
+      }
     }
     const doorMeta = [
-      { id: 'room1', x: 15, y: 55, label: 'File storage room door' },
-      { id: 'room2', x: 30, y: 80, label: 'Security room door' },
-      { id: 'room3', x: 70, y: 80, label: 'Electrical room door' },
-      { id: 'room4', x: 85, y: 55, label: 'Laboratory door' },
+      { id: 'room1', x: 15, y: 58, label: 'File storage room door' },
+      { id: 'room2', x: 34, y: 58, label: 'Security room door' },
+      { id: 'room3', x: 66, y: 58, label: 'Electrical room door' },
+      { id: 'room4', x: 85, y: 58, label: 'Laboratory door' },
     ];
     const doorMetaIds = doorMeta.map((d) => d.id);
     const hubDoorBtns = {};
+
+    // A handful of unique, clickable hub fixtures (there are only 5, and
+    // they're the first thing a player sees, so each gets its own line
+    // instead of a pooled one). Wall-mounted ones sit above y=50; the two
+    // freestanding cabinets sit on the floor below y=66.
+    const HUB_PROPS = [
+      { id: 'hub-cam', x: 50, y: 14, node: () => drawVaultCam('#00ff9c', 7), label: 'Security camera', desc: 'A security camera, lens cracked. It hasn’t seen anything in years.' },
+      { id: 'hub-light-1', x: 10, y: 8, node: () => drawWallLight('#ffd166', 6), label: 'Wall light', desc: 'A wall light, humming faint and steady.' },
+      { id: 'hub-light-2', x: 90, y: 8, node: () => drawWallLight('#ffd166', 6), label: 'Wall light', desc: 'Flickers on a delay, like it’s thinking about it.' },
+      { id: 'hub-cabinet-1', x: 8, y: 78, node: () => drawCabinet('#00ff9c', 8, undefined, 2), label: 'Cabinet', desc: 'Locked. Whatever paperwork lives in here isn’t leaving with you.' },
+      { id: 'hub-cabinet-2', x: 92, y: 78, node: () => drawCabinet('#00ff9c', 8, undefined, 2), label: 'Cabinet', desc: 'Empty drawers, every one. Somebody cleared this out already.' },
+      { id: 'hub-plant-1', x: 20, y: 90, node: () => drawPlantProp(8), label: 'Plastic plant', desc: 'Plastic, unconvincingly. Nobody watered anything down here.' },
+      { id: 'hub-plant-2', x: 80, y: 90, node: () => drawPlantProp(8), label: 'Plastic plant', desc: 'A thin layer of dust standing in for soil.' },
+    ];
+    async function onHubPropClick(def) {
+      await room.walkTo(def.id);
+      if (room.getActive() !== def.id) return;
+      hubAmbientEl.textContent = def.desc;
+    }
 
     async function onVaultClick() {
       await room.walkTo('vault');
@@ -367,12 +394,12 @@ export default {
       await crossTo(id, ROOM_RENDERERS[id]);
     }
 
-    async function crossTo(name, renderFn) {
+    async function crossTo(name, renderFn, arg) {
       room.el.classList.add('room-scene--transition');
       sfx.terminalOpen();
       await delay(230, ctx.signal).catch(() => {});
       currentRoomName = name;
-      renderFn(true);
+      renderFn(true, arg);
       await delay(270, ctx.signal).catch(() => {});
       room.el.classList.remove('room-scene--transition');
     }
@@ -394,27 +421,45 @@ export default {
       });
     }
 
+    // Every side room's exit is the literal same door the player walked
+    // in through — a fixed spot just inside the entrance (50, 92) — not a
+    // second, unrelated door parked in a corner. `roomId` is which hub
+    // door to re-place the player at on the way back (see renderHub's
+    // `fromId` param), so the round trip lands you exactly where you left.
+    function addBackDoor(roomId) {
+      room.setHotspot('back', {
+        x: 50, y: 92,
+        build: () => [drawDoor(false, 7), el('span', {}, 'BACK')],
+        label: 'Back through the door you came in',
+        onClick: async () => {
+          await room.walkTo('back');
+          if (room.getActive() === 'back') await crossTo('vault', renderHub, roomId);
+        },
+      });
+    }
+
     // ---- Room 1: file storage — 30 cabinets + 7 paper piles + 3 cubicles
     // + 9 posters (one hides the clue) + a closet door; 20 clickable
     // things total (7 + 3 + 9 + 1). ----
-    function renderRoom1() {
+    function renderRoom1(entry) {
       room.clearHotspots();
-      const cabinets = scatter(30, { xMin: 4, xMax: 96, yMin: 4, yMax: 22, cols: 10 });
+      if (entry) room.placeAt(50, 92);
+      const cabinets = scatter(30, { xMin: 4, xMax: 96, yMin: 4, yMax: 16, cols: 10 });
       room.setDecor(cabinets.map((p) => ({ ...p, node: drawCabinet('#00ff9c', 6, undefined, randInt(2, 3)) })));
 
-      const paperSpots = scatter(7, { xMin: 8, xMax: 92, yMin: 30, yMax: 45, cols: 7 });
+      const paperSpots = scatter(7, { xMin: 8, xMax: 92, yMin: 20, yMax: 32, cols: 7 });
       paperSpots.forEach((p, i) => investigateHotspot(`paper${i}`, {
         ...p, node: () => drawPaperPile(7), label: 'Paper pile',
         onInvestigate: () => logLine(sample(DECOY_LINES, 1)[0]),
       }));
 
-      const cubicleSpots = scatter(3, { xMin: 15, xMax: 85, yMin: 55, yMax: 55, cols: 3 });
+      const cubicleSpots = scatter(3, { xMin: 15, xMax: 85, yMin: 72, yMax: 72, cols: 3 });
       cubicleSpots.forEach((p, i) => investigateHotspot(`cubicle${i}`, {
         ...p, node: () => drawComputerCubicle('#00ff9c', 7), label: 'Computer cubicle',
         onInvestigate: () => logLine(sample(DECOY_LINES, 1)[0]),
       }));
 
-      const posterSpots = scatter(9, { xMin: 8, xMax: 92, yMin: 68, yMax: 90, cols: 5 });
+      const posterSpots = scatter(9, { xMin: 8, xMax: 92, yMin: 38, yMax: 50, cols: 5 });
       const clueIdx = randInt(0, 8);
       posterSpots.forEach((p, i) => {
         let found = false;
@@ -442,25 +487,24 @@ export default {
       });
 
       investigateHotspot('closet', {
-        x: 50, y: 95, node: () => drawClosetDoor(false, 8), label: 'Closet door',
+        x: 50, y: 54, node: () => drawClosetDoor(false, 8), label: 'Closet door',
         onInvestigate: () => logLine('Inside: mop, bucket, a calendar three years out of date.'),
       });
 
-      room.setHotspot('back', {
-        x: 95, y: 8, build: () => [drawDoor(false, 7), el('span', {}, 'BACK')], label: 'Back to the vault',
-        onClick: async () => { await room.walkTo('back'); if (room.getActive() === 'back') await crossTo('vault', renderHub); },
-      });
+      addBackDoor('room1');
     }
 
     // ---- Room 2: security — a big multiscreen, 4 monitor sections, a
     // control panel, chairs. ----
-    function renderRoom2() {
+    function renderRoom2(entry) {
       room.clearHotspots();
-      const chairSpots = scatter(11, { xMin: 5, xMax: 95, yMin: 60, yMax: 90, cols: 6 });
-      room.setDecor([
-        { x: 50, y: 15, node: drawMultiscreen(10) },
-        ...chairSpots.map((p) => ({ ...p, node: drawChairProp(6) })),
-      ]);
+      if (entry) room.placeAt(50, 92);
+      room.setDecor([{ x: 50, y: 15, node: drawMultiscreen(10) }]);
+      const chairSpots = scatter(11, { xMin: 5, xMax: 95, yMin: 64, yMax: 90, cols: 6 });
+      chairSpots.forEach((p, i) => investigateHotspot(`chair${i}`, {
+        ...p, node: () => drawChairProp(6), label: 'Chair',
+        onInvestigate: () => logLine(sample(DECOY_LINES, 1)[0]),
+      }));
 
       const sectionSpots = scatter(4, { xMin: 12, xMax: 88, yMin: 38, yMax: 38, cols: 4 });
       const clueIdx = randInt(0, 3);
@@ -489,17 +533,15 @@ export default {
         onInvestigate: () => logLine('Dials, all zeroed out. Someone shut this down in a hurry.'),
       });
 
-      room.setHotspot('back', {
-        x: 95, y: 8, build: () => [drawDoor(false, 7), el('span', {}, 'BACK')], label: 'Back to the vault',
-        onClick: async () => { await room.walkTo('back'); if (room.getActive() === 'back') await crossTo('vault', renderHub); },
-      });
+      addBackDoor('room2');
     }
 
     // ---- Room 3: electrical — 8 lockers, an electrical box, 2 vents (one
     // loose, holding a clue), a pyramid of 6 crates (top 3 cracked, one
     // holding a clue). ----
-    function renderRoom3() {
+    function renderRoom3(entry) {
       room.clearHotspots();
+      if (entry) room.placeAt(50, 92);
       const lockerSpots = scatter(8, { xMin: 8, xMax: 92, yMin: 12, yMax: 32, cols: 4 });
       lockerSpots.forEach((p, i) => investigateHotspot(`locker${i}`, {
         ...p, node: () => drawLockerStuffed('#00ff9c', 7), label: 'Locker',
@@ -544,23 +586,31 @@ export default {
         });
       }
 
-      room.setHotspot('back', {
-        x: 95, y: 8, build: () => [drawDoor(false, 7), el('span', {}, 'BACK')], label: 'Back to the vault',
-        onClick: async () => { await room.walkTo('back'); if (room.getActive() === 'back') await crossTo('vault', renderHub); },
-      });
+      addBackDoor('room3');
     }
 
     // ---- Room 4: laboratory — a decoy. Nothing here has a clue. ----
-    function renderRoom4() {
+    function renderRoom4(entry) {
       room.clearHotspots();
-      room.setDecor([
-        { x: 25, y: 25, node: drawLabDesk(6) },
-        { x: 25, y: 45, node: drawLabDesk(6) },
-        { x: 25, y: 65, node: drawLabDesk(6) },
-        { x: 75, y: 20, node: drawLabDesk(5) },
-        { x: 60, y: 80, node: drawLabFlask('#2f9e5b', 7) },
-        { x: 70, y: 82, node: drawLabFlask('#4cd6ff', 6) },
-      ]);
+      if (entry) room.placeAt(50, 92);
+      const deskSpots = [
+        { id: 'desk0', x: 15, y: 68, unit: 6 },
+        { id: 'desk1', x: 35, y: 72, unit: 6 },
+        { id: 'desk2', x: 65, y: 68, unit: 6 },
+        { id: 'desk3', x: 85, y: 72, unit: 5 },
+      ];
+      deskSpots.forEach((d) => investigateHotspot(d.id, {
+        x: d.x, y: d.y, node: () => drawLabDesk(d.unit), label: 'Lab desk',
+        onInvestigate: () => logLine(sample(DECOY_LINES, 1)[0]),
+      }));
+      investigateHotspot('flask0', {
+        x: 25, y: 90, node: () => drawLabFlask('#2f9e5b', 7), label: 'Lab flask',
+        onInvestigate: () => logLine(sample(DECOY_LINES, 1)[0]),
+      });
+      investigateHotspot('flask1', {
+        x: 75, y: 90, node: () => drawLabFlask('#4cd6ff', 6), label: 'Lab flask',
+        onInvestigate: () => logLine(sample(DECOY_LINES, 1)[0]),
+      });
       const decoys = [
         { id: 'lockerA', label: 'Cracked-open locker' },
         { id: 'lockerB', label: 'Cracked-open locker' },
@@ -569,16 +619,13 @@ export default {
         { id: 'rig1', label: 'Experiment contraption' },
         { id: 'rig2', label: 'Experiment contraption' },
       ];
-      const spots = scatter(decoys.length, { xMin: 15, xMax: 85, yMin: 50, yMax: 92, cols: 3 });
+      const spots = scatter(decoys.length, { xMin: 15, xMax: 85, yMin: 78, yMax: 94, cols: 3 });
       decoys.forEach((d, i) => investigateHotspot(d.id, {
         ...spots[i], node: () => drawPaperPile(7), label: d.label,
         onInvestigate: () => logLine(sample(DECOY_LINES, 1)[0]),
       }));
 
-      room.setHotspot('back', {
-        x: 95, y: 8, build: () => [drawDoor(false, 7), el('span', {}, 'BACK')], label: 'Back to the vault',
-        onClick: async () => { await room.walkTo('back'); if (room.getActive() === 'back') await crossTo('vault', renderHub); },
-      });
+      addBackDoor('room4');
     }
 
     const ROOM_RENDERERS = { room1: renderRoom1, room2: renderRoom2, room3: renderRoom3, room4: renderRoom4 };

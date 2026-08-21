@@ -570,25 +570,48 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   overflow: hidden;
   display: block;
   cursor: pointer;
-  /* Two-tone wall/floor backdrop instead of an empty void: a wall band
-     above the horizon, a floor band below it, a skirting line at the
-     seam, and a floor grid, all tinted by this room's --accent (set
-     inline by roomKit.js) so every sector reads as a distinct place
-     instead of the same flat black box. */
+  /* A stylized 2D "corner room" instead of an empty void or a single flat
+     wall: a left wall and a back wall (the left one noticeably darker, as
+     if turned away from the light, so the two surfaces actually read as
+     different planes meeting at a corner) sit above a floor, with an
+     accent-tinted seam running down the corner and along the horizon.
+     Keep ROOM_HORIZON/ROOM_CORNER in roomKit.js in sync with the 62%/16%
+     split used here — scene files position wall-mounted vs. freestanding
+     objects against those same constants. */
   background-color: #05070a;
   background-image:
+    /* corner seam: the vertical line where the two walls meet */
+    linear-gradient(to right,
+      transparent, color-mix(in srgb, var(--accent, #39ff14) 55%, #000) 45%,
+      color-mix(in srgb, var(--accent, #39ff14) 55%, #000) 55%, transparent),
+    /* horizon seam: the line where the walls meet the floor */
     linear-gradient(to bottom,
-      transparent 0, transparent calc(64% - 3px),
-      color-mix(in srgb, var(--accent, #39ff14) 75%, #000) calc(64% - 3px),
-      color-mix(in srgb, var(--accent, #39ff14) 75%, #000) calc(64% + 3px),
-      transparent calc(64% + 3px), transparent 100%),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent 30%, transparent 100%),
-    linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.65) 100%),
+      transparent 0, transparent calc(62% - 3px),
+      color-mix(in srgb, var(--accent, #39ff14) 75%, #000) calc(62% - 3px),
+      color-mix(in srgb, var(--accent, #39ff14) 75%, #000) calc(62% + 3px),
+      transparent calc(62% + 3px), transparent 100%),
+    /* left wall: darker, narrower panels — the surface turned away */
+    repeating-linear-gradient(90deg, #10161c 0 46px, #0a0e12 46px 48px),
+    /* back wall: lighter, wider panels — the surface facing the room */
     repeating-linear-gradient(90deg, #1b242d 0 92px, #131a21 92px 96px),
+    /* floor: diagonal tile */
     repeating-linear-gradient(115deg, #0a0f12 0 42px, #050809 42px 46px),
+    /* ambient shading: a ceiling-side darken, a floor-side darken */
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent 45%),
+    linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.65) 100%),
     radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--accent, #39ff14) 16%, transparent), transparent 65%);
-  background-size: 100% 100%, 100% 64%, 100% 36%, 100% 64%, 100% 36%, 100% 100%;
-  background-position: top, top, bottom, top, bottom, top;
+  background-size:
+    6px 62%, 100% 100%,
+    16% 62%, 84% 62%,
+    100% 38%,
+    100% 62%, 100% 38%,
+    100% 100%;
+  background-position:
+    calc(16% - 3px) top, top,
+    left top, right top,
+    left bottom,
+    left top, left bottom,
+    top;
   background-repeat: no-repeat;
 }
 .room-decor-layer, .room-hotspot-layer { position: absolute; inset: 0; }
@@ -1014,18 +1037,51 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   background: rgba(255, 255, 255, 0.25);
   animation: waterRipple 3s ease-in-out infinite;
 }
-.panel-lights {
+/* A physical breaker-panel casing mirroring the puzzle grid live, styled
+   deliberately unlike the clean flat squares of the puzzle UI on the
+   right — a riveted metal box with round status LEDs and a label plate,
+   so it reads as an object bolted to the wall rather than a second copy
+   of the widget. */
+.panel-lights-frame {
   position: absolute;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 3px;
-  width: 8%;
-  aspect-ratio: 1;
   z-index: 1;
+  width: 24%;
+  padding: 8% 8% 12%;
+  background: linear-gradient(160deg, #2c2313 0%, #171106 100%);
+  border: 2px solid #5e4626;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), inset 0 0 8px rgba(0, 0, 0, 0.6);
   pointer-events: none; /* decorative mirror of the puzzle grid, never a click target */
 }
-.panel-light { border-radius: 1px; background: #2a2210; border: 1px solid #4a3200; }
-.panel-light.panel-light--on { background: #ffb000; box-shadow: 0 0 5px #ffb000; }
+.panel-lights-frame::before, .panel-lights-frame::after {
+  content: '';
+  position: absolute;
+  top: 5%;
+  width: 6%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #8a6a3a;
+  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.8);
+}
+.panel-lights-frame::before { left: 5%; }
+.panel-lights-frame::after { right: 5%; }
+.panel-lights-label {
+  position: absolute;
+  left: 0; right: 0; bottom: 3%;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 0.42rem;
+  letter-spacing: 0.05em;
+  color: #ffb000;
+  opacity: 0.85;
+}
+.panel-lights {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12%;
+}
+.panel-light { border-radius: 50%; aspect-ratio: 1; background: #1a1508; border: 1px solid #000; box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.9); }
+.panel-light.panel-light--on { background: #ffb000; box-shadow: 0 0 6px #ffb000, inset 0 0 2px rgba(255, 255, 255, 0.5); }
 @media (prefers-reduced-motion: reduce) {
   .flood-water::before { animation: none; }
   .cell--hint { animation: none; }

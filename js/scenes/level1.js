@@ -21,7 +21,7 @@
 import { completeLevel, getState } from '../state.js';
 import { sfx } from '../audio.js';
 import { shake } from '../fx.js';
-import { el, delay, clamp, randInt, sample } from '../utils.js';
+import { el, delay, randInt, sample } from '../utils.js';
 import { terminalFrame, typeInto, showInterstitial } from './shared.js';
 import {
   drawDoor, drawTerminal, drawKeycard, drawBox, drawCabinet, drawLocker, drawSciDesk,
@@ -46,38 +46,27 @@ const HELP_ROWS = [
 // lab clutter, lights, ...) is now a table of walkable, clickable hotspots:
 // every one of them gets a short LOOK description, and one (the evidence
 // tag) is also a pickup, even though nothing here is required to clear the
-// sector. Percentage coordinates within the room box. Only the closet
-// doorway around the terminal stays pure decor (buildDecorOnly() below) —
-// it's just the terminal nook's framing, not its own object.
+// sector. Percentage coordinates within the room box, split to match the
+// room's own wall/floor backdrop (see roomKit.js's ROOM_HORIZON/ROOM_CORNER
+// and .room-scene--free in style.css): wall-mounted fixtures (lights,
+// monitor banks, the pinned tag) sit above y=58, on either the left wall
+// (x<16) or the back wall (x>16); every freestanding piece of furniture
+// (cabinets, lockers, desks, crates, plants) sits below y=66, on the floor,
+// where it visually belongs instead of floating in the wall band. Only the
+// closet doorway around the terminal stays pure decor (buildDecorOnly()
+// below) — it's just the terminal nook's framing, not its own object.
 function buildProps() {
   return [
-    { id: 'prop-cabinet-1', x: 8, y: 20, node: () => drawCabinet('#39ff14', 7, undefined, 2), label: 'Supply cabinet', desc: 'A supply cabinet. Empty hangers rattle when you nudge it.' },
-    { id: 'prop-cabinet-2', x: 25, y: 14, node: () => drawCabinet('#39ff14', 7, undefined, 3), label: 'Bolted cabinet', desc: "Bolted shut. Someone stenciled 'DO NOT' on it; the rest flaked off." },
-    { id: 'prop-locker-1', x: 40, y: 11, node: () => drawLocker('#39ff14', 7), label: 'Dented locker', desc: 'A gym locker, dented like it lost a fight.' },
-    { id: 'prop-locker-2', x: 46, y: 11, node: () => drawLocker('#39ff14', 7, true), label: 'Open locker', desc: 'Hanging inside: a jacket two sizes too small. Not yours.' },
-    { id: 'prop-desk-1', x: 60, y: 20, node: () => drawSciDesk('#39ff14', 7), label: 'Lab desk', desc: 'A lab desk, dust rings where equipment used to sit.' },
-    { id: 'prop-desk-2', x: 15, y: 34, node: () => drawSciDesk('#39ff14', 6), label: 'Carved desk', desc: "Someone carved 'J.A. WAS HERE' into the wood." },
-    { id: 'prop-flask-1', x: 62, y: 30, node: () => drawLabFlask('#39ff14', 7), label: 'Cracked flask', desc: 'A cracked flask, long since dried out.' },
-    { id: 'prop-flask-2', x: 30, y: 30, node: () => drawLabFlask('#39ff14', 6), label: 'Empty flask', desc: 'Whatever was brewing in here evaporated years ago.' },
-    { id: 'prop-light-1', x: 20, y: 5, node: () => drawWallLight('#ffd166', 7), label: 'Wall light', desc: 'A wall light. Steady, at least - small mercies.' },
-    { id: 'prop-light-2', x: 50, y: 5, node: () => drawWallLight('#ffd166', 7), label: 'Wall light', desc: 'This one buzzes when you get close. Probably fine.' },
-    { id: 'prop-light-3', x: 80, y: 5, node: () => drawWallLight('#ffd166', 7), label: 'Wall light', desc: 'Flickers if you stare at it too long. You look away.' },
-    { id: 'prop-light-4', x: 65, y: 5, node: () => drawWallLight('#ffd166', 6), label: 'Wall light', desc: 'A wall light. Steady, at least - small mercies.' },
-    { id: 'prop-plant-1', x: 5, y: 88, node: () => drawPlantProp(7), label: 'Plastic plant', desc: 'A plastic plant, dust standing in for dew.' },
-    { id: 'prop-plant-2', x: 95, y: 88, node: () => drawPlantProp(7), label: 'Plastic plant', desc: 'Somehow greener than everything else in this room.' },
-    { id: 'prop-plant-3', x: 55, y: 66, node: () => drawPlantProp(6), label: 'Plastic plant', desc: 'Fake leaves, real dust. A lot of it.' },
-    { id: 'prop-crate-1', x: 15, y: 92, node: () => drawCrateStack('#8a6a3a', 7), label: 'Crate stack', desc: "Stenciled 'FRAGILE' in a language you don't recognize." },
-    { id: 'prop-crate-2', x: 70, y: 90, node: () => drawCrateStack('#8a6a3a', 6), label: 'Crate stack', desc: 'Nailed shut. Prying it open feels like a bad idea.' },
-    { id: 'prop-crate-3', x: 48, y: 92, node: () => drawCrateStack('#8a6a3a', 6), label: 'Crate stack', desc: 'Empty, by the sound of it when you knock.' },
-    { id: 'prop-monitor-1', x: 35, y: 8, node: () => drawMonitorBank('#39ff14', 7), label: 'Monitor bank', desc: 'A bank of dead monitors. One still shows a login screen, frozen mid-blink.' },
-    { id: 'prop-monitor-2', x: 70, y: 12, node: () => drawMonitorBank('#39ff14', 6), label: 'Monitor bank', desc: 'More dead screens. Your reflection is the only thing on them.' },
-    { id: 'prop-vent-1', x: 55, y: 95, node: () => drawVentProp(6), label: 'Vent grate', desc: 'A vent grate. Something ticks behind it, then stops.' },
-    { id: 'prop-vent-2', x: 10, y: 48, node: () => drawVentProp(6), label: 'Vent grate', desc: 'Warm air leaks out. Somewhere, something is still running.' },
-    { id: 'prop-cabinet-3', x: 92, y: 62, node: () => drawCabinet('#39ff14', 6, undefined, 2), label: 'Open cabinet', desc: "This one's unlocked, and empty. Somebody beat you to it." },
-    { id: 'prop-locker-3', x: 85, y: 78, node: () => drawLocker('#39ff14', 6), label: 'Named locker', desc: "Locked. A faded nameplate reads 'J. ALVAREZ.'" },
-    { id: 'prop-shelf', x: 18, y: 62, node: () => drawShelf('#39ff14', 7), label: 'Shelf of binders', desc: 'A shelf of ring binders, spines unlabeled. None of them budge.' },
+    // ---- wall-mounted (left wall x<16, back wall x>16, y<58) ----
+    { id: 'prop-light-1', x: 8, y: 8, node: () => drawWallLight('#ffd166', 6), label: 'Wall light', desc: 'A wall light. Steady, at least - small mercies.' },
+    { id: 'prop-light-2', x: 30, y: 6, node: () => drawWallLight('#ffd166', 7), label: 'Wall light', desc: 'This one buzzes when you get close. Probably fine.' },
+    { id: 'prop-light-3', x: 78, y: 6, node: () => drawWallLight('#ffd166', 7), label: 'Wall light', desc: 'Flickers if you stare at it too long. You look away.' },
+    { id: 'prop-light-4', x: 55, y: 6, node: () => drawWallLight('#ffd166', 6), label: 'Wall light', desc: 'A wall light. Steady, at least - small mercies.' },
+    { id: 'prop-monitor-1', x: 36, y: 12, node: () => drawMonitorBank('#39ff14', 7), label: 'Monitor bank', desc: 'A bank of dead monitors. One still shows a login screen, frozen mid-blink.' },
+    { id: 'prop-monitor-2', x: 68, y: 16, node: () => drawMonitorBank('#39ff14', 6), label: 'Monitor bank', desc: 'More dead screens. Your reflection is the only thing on them.' },
+    { id: 'prop-vent-2', x: 60, y: 50, node: () => drawVentProp(6), label: 'Vent grate', desc: 'Warm air leaks out. Somewhere, something is still running.' },
     {
-      id: 'prop-tag', x: 45, y: 38, node: () => drawClueTag('#39ff14', 6), label: 'Evidence tag',
+      id: 'prop-tag', x: 44, y: 30, node: () => drawClueTag('#39ff14', 6), label: 'Evidence tag',
       desc: "A tag reading 'EVIDENCE - DO NOT REMOVE.' Someone removed it anyway.",
       pickup: {
         label: 'EVIDENCE TAG',
@@ -85,6 +74,25 @@ function buildProps() {
         lore: 'The tag reads: SECTOR 0, INCIDENT 004. Whatever happened here got filed and buried instead.',
       },
     },
+    // ---- freestanding furniture and floor clutter (y>66) ----
+    { id: 'prop-cabinet-1', x: 10, y: 74, node: () => drawCabinet('#39ff14', 7, undefined, 2), label: 'Supply cabinet', desc: 'A supply cabinet. Empty hangers rattle when you nudge it.' },
+    { id: 'prop-cabinet-2', x: 27, y: 70, node: () => drawCabinet('#39ff14', 7, undefined, 3), label: 'Bolted cabinet', desc: "Bolted shut. Someone stenciled 'DO NOT' on it; the rest flaked off." },
+    { id: 'prop-locker-1', x: 43, y: 72, node: () => drawLocker('#39ff14', 7), label: 'Dented locker', desc: 'A gym locker, dented like it lost a fight.' },
+    { id: 'prop-locker-2', x: 50, y: 72, node: () => drawLocker('#39ff14', 7, true), label: 'Open locker', desc: 'Hanging inside: a jacket two sizes too small. Not yours.' },
+    { id: 'prop-desk-1', x: 66, y: 76, node: () => drawSciDesk('#39ff14', 7), label: 'Lab desk', desc: 'A lab desk, dust rings where equipment used to sit.' },
+    { id: 'prop-flask-1', x: 70, y: 70, node: () => drawLabFlask('#39ff14', 6), label: 'Cracked flask', desc: 'A cracked flask on the desk, long since dried out.' },
+    { id: 'prop-desk-2', x: 20, y: 84, node: () => drawSciDesk('#39ff14', 6), label: 'Carved desk', desc: "Someone carved 'J.A. WAS HERE' into the wood." },
+    { id: 'prop-flask-2', x: 24, y: 78, node: () => drawLabFlask('#39ff14', 6), label: 'Empty flask', desc: 'Whatever was brewing in this one evaporated years ago.' },
+    { id: 'prop-cabinet-3', x: 91, y: 68, node: () => drawCabinet('#39ff14', 6, undefined, 2), label: 'Open cabinet', desc: "This one's unlocked, and empty. Somebody beat you to it." },
+    { id: 'prop-locker-3', x: 84, y: 86, node: () => drawLocker('#39ff14', 6), label: 'Named locker', desc: "Locked. A faded nameplate reads 'J. ALVAREZ.'" },
+    { id: 'prop-shelf', x: 14, y: 90, node: () => drawShelf('#39ff14', 7), label: 'Shelf of binders', desc: 'A shelf of ring binders, spines unlabeled. None of them budge.' },
+    { id: 'prop-plant-1', x: 4, y: 92, node: () => drawPlantProp(7), label: 'Plastic plant', desc: 'A plastic plant, dust standing in for dew.' },
+    { id: 'prop-plant-2', x: 96, y: 92, node: () => drawPlantProp(7), label: 'Plastic plant', desc: 'Somehow greener than everything else in this room.' },
+    { id: 'prop-plant-3', x: 58, y: 90, node: () => drawPlantProp(6), label: 'Plastic plant', desc: 'Fake leaves, real dust. A lot of it.' },
+    { id: 'prop-crate-1', x: 16, y: 96, node: () => drawCrateStack('#8a6a3a', 7), label: 'Crate stack', desc: "Stenciled 'FRAGILE' in a language you don't recognize." },
+    { id: 'prop-crate-2', x: 74, y: 94, node: () => drawCrateStack('#8a6a3a', 6), label: 'Crate stack', desc: 'Nailed shut. Prying it open feels like a bad idea.' },
+    { id: 'prop-crate-3', x: 50, y: 97, node: () => drawCrateStack('#8a6a3a', 6), label: 'Crate stack', desc: 'Empty, by the sound of it when you knock.' },
+    { id: 'prop-vent-1', x: 36, y: 96, node: () => drawVentProp(6), label: 'Floor vent', desc: 'A vent grate. Something ticks behind it, then stops.' },
   ];
 }
 
@@ -163,20 +171,6 @@ export default {
     body.appendChild(metaRow);
     body.appendChild(inputRow);
     container.appendChild(el('div', { class: 'level1-scene split-scene' }, [room.el, frame]));
-
-    // Clicking open floor (not a hotspot, not a popup, not the player)
-    // just walks there — the room doesn't have to be a grid of buttons to
-    // be interactive. Any open overlay (box contents, keypad, inventory)
-    // is excluded outright: it's a child of room.el too, so a background
-    // click on it would otherwise bubble up here and walk the player at
-    // the same time it closes the popup.
-    room.el.addEventListener('click', (e) => {
-      if (e.target.closest('button, .inventory-overlay')) return;
-      const rect = room.el.getBoundingClientRect();
-      const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 4, 96);
-      const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 4, 96);
-      room.walkToPoint(x, y);
-    }, { signal: ctx.signal });
 
     const input = inputRow.querySelector('input');
 
@@ -266,7 +260,7 @@ export default {
 
     function renderDoor() {
       room.setHotspot('door', {
-        x: 10, y: 55,
+        x: 10, y: 58,
         build: () => [drawDoor(!flags.doorUnlocked, 8), el('span', {}, flags.doorUnlocked ? 'DOOR: OPEN' : 'DOOR: LOCKED')],
         label: flags.doorUnlocked ? 'Door, already open' : 'Steel door with a keypad',
         onClick: onDoorClick,
@@ -275,7 +269,7 @@ export default {
 
     function renderTerminalObject() {
       room.setHotspot('terminal', {
-        x: 78, y: 45,
+        x: 78, y: 57,
         build: () => [drawTerminal(8), el('span', {}, 'TERMINAL')],
         label: 'Dusty terminal in the closet nook',
         onClick: onTerminalObjectClick,

@@ -14,12 +14,22 @@ import { drawPlayer } from '../sprites.js';
 
 const FOOTSTEP_MS = 150;
 
+// The room backdrop (see .room-scene--free in style.css) is a stylized
+// corner: a left wall and a back wall meeting at a seam, sitting on a
+// floor. These percentages describe where that seam and horizon actually
+// fall, so every sector's object table can place wall-mounted things
+// (lights, posters, monitors) inside the wall band and freestanding
+// furniture (crates, desks, tanks) on the floor instead of guessing.
+export const ROOM_HORIZON = 62; // y% — the wall/floor seam. Wall: y < this. Floor: y >= this.
+export const ROOM_CORNER = 16; // x% — the left-wall/back-wall seam, wall band only.
+
 // Creates a walkable room: a `position:relative` box (room-scene--free) that
 // fills its half of the split-scene layout. Returns an API for scattering
 // decor, placing/removing clickable hotspots, walking the player between
 // them, popping a bubble of options next to the player, and showing a
 // visual inventory overlay. `accent` tints the player sprite and bubble
-// border to match the sector's color.
+// border to match the sector's color. Clicking anywhere in the room that
+// isn't a hotspot or an open popup just walks the player there.
 export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
   const roomEl = el('div', { class: 'room-scene room-scene--free', style: `--accent:${accent}`, role: 'group', 'aria-label': ariaLabel });
   const decorLayer = el('div', { class: 'room-decor-layer', 'aria-hidden': 'true' });
@@ -27,6 +37,21 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
   const playerWrap = el('div', { class: 'room-player', style: 'left:50%; top:60%' });
   const bubbleEl = el('div', { class: 'room-bubble', hidden: true });
   roomEl.append(decorLayer, hotspotLayer, playerWrap, bubbleEl);
+
+  // Open-floor click-to-walk, shared by every sector that uses createRoom()
+  // instead of each scene file wiring its own copy. Excludes clicks on a
+  // hotspot button and on any open popup (box contents, keypads, the
+  // inventory overlay) — those are children of roomEl too, so a background
+  // click on one would otherwise bubble up here and walk the player at the
+  // same moment it closes the popup.
+  roomEl.addEventListener('click', (e) => {
+    if (e.target.closest('button, .inventory-overlay')) return;
+    const rect = roomEl.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const x = Math.max(4, Math.min(96, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(4, Math.min(96, ((e.clientY - rect.top) / rect.height) * 100));
+    walkToPoint(x, y);
+  });
 
   const hotspots = new Map(); // id -> { x, y, btn }
   let legPhase = 0;
