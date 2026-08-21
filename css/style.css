@@ -610,7 +610,16 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .room-wall-back {
   left: 0; top: 0;
   width: 100cqw; height: 62cqh;
-  transform: translateZ(-95cqmin);
+  /* This depth (also .room-wall-side's width and .room-floor's matching
+     translateZ below) used to be 95cqmin. That pushed the wall base far
+     enough from the camera (P:78cqmin) that it rendered small and
+     foreshortened, which is fine for a wall, but meant *reaching* it — the
+     floor plane extending back to actually connect there — required either
+     a visible gap (not extending it) or a very compressed, hard-to-use
+     connection (extending it). Bringing the walls forward instead, to a
+     shallower 28cqmin, keeps the connection point close and legibly sized
+     while still reading as a real receding wall. */
+  transform: translateZ(-28cqmin);
   background-image:
     repeating-linear-gradient(90deg,
       color-mix(in srgb, var(--accent, #39ff14) 3%, #1b242d) 0 11cqmin,
@@ -627,7 +636,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
    cue, now physically true instead of two different flat tints). */
 .room-wall-side {
   left: 0; top: 0;
-  width: 95cqmin; height: 62cqh;
+  width: 28cqmin; height: 62cqh;
   transform-origin: left center;
   transform: rotateY(90deg);
   background-image:
@@ -644,34 +653,26 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
    contact-shadow gradient hugging both wall bases. */
 .room-floor {
   left: 0; top: 62cqh;
-  /* Height is deliberately more than the 95cqmin the hinge is anchored
+  /* Height is deliberately more than the 28cqmin the hinge is anchored
      back by (below): the hinge's screen position only depends on the
      translateZ shift, not this height, so the extra reach here just lets
      the floor's near edge come far enough toward the camera to fill all
      the way to the bottom of the room instead of stopping partway down. */
-  width: 100cqw; height: 160cqmin;
+  width: 100cqw; height: 72cqmin;
   transform-origin: top center;
   /* rotateX(90deg) alone leaves the floor's hinge (its near/horizon edge)
      sitting at Z:0 — screen-plane depth — while the walls sit back at
-     Z:-95cqmin (see .room-wall-back/.room-wall-side above), so despite
+     Z:-28cqmin (see .room-wall-back/.room-wall-side above), so despite
      sharing the same on-screen horizon line, the hinge and the wall base
      were never actually at the same 3D point: perspective projected them
-     to different screen positions, opening a gap. translateZ(-95cqmin),
+     to different screen positions, opening a gap. translateZ(-28cqmin),
      composed outermost here (CSS applies the rightmost function first, so
      this runs *after* the rotation, in the already-rotated frame) shifts
-     the whole rotated plane back by the same 95cqmin the walls sit at, so
+     the whole rotated plane back by the same 28cqmin the walls sit at, so
      the hinge now lands exactly on the wall base, with the extra height
      above reaching the near edge far enough forward (past screen-plane
      depth) to fill the room down to its front edge. */
-  transform: translateZ(-95cqmin) rotateX(90deg);
-  /* The hinge — right where this needs to visibly meet the wall base — sits
-     at the most heavily foreshortened end of the plane (see the translateZ
-     comment above), which shrinks this tile pattern's 5.5cqmin repeat down
-     to a near-illegible sliver there; the two tile colors were also close
-     enough to the room's near-black ambient background (#05070a) that the
-     whole blurred result read as empty void rather than shaded floor.
-     Lighter, higher-contrast tile colors keep that region legibly "floor"
-     without changing anything about where the plane actually sits. */
+  transform: translateZ(-28cqmin) rotateX(90deg);
   background-image:
     repeating-linear-gradient(45deg, #161f24 0 5.5cqmin, #0e161a 5.5cqmin 5.7cqmin),
     repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.12) 0 5.5cqmin, transparent 5.5cqmin 5.7cqmin),
