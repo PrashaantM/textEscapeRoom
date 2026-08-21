@@ -9,7 +9,7 @@ import { sfx } from '../audio.js';
 import { shake, glitchBurst, pulse } from '../fx.js';
 import { el, delay, randInt } from '../utils.js';
 import { terminalFrame, showInterstitial } from './shared.js';
-import { drawPlayer } from '../sprites.js';
+import { drawPlayer, drawArcadeCabinet } from '../sprites.js';
 
 const ROUNDS_TO_WIN = 5;
 const PADS = [
@@ -61,11 +61,22 @@ export default {
 
     const playerItem = el('div', { class: 'player-sprite arcade-player' }, [drawPlayer('#ff2fd0', 6), el('span', {}, 'PLAYER 1')]);
 
+    // ---- room visual: the physical arcade cabinet, standing next to the
+    // terminal that shows its screen/HUD, matching Sectors 0/2/3's split
+    // layout. The pad grid itself is the same interactive element, just
+    // relocated here instead of embedded in the terminal body.
+    const cabinetDecor = el('div', { class: 'room-decor', 'aria-hidden': 'true' }, [drawArcadeCabinet('#ff2fd0', 6)]);
+    const cabinetDecor2 = el('div', { class: 'room-decor', 'aria-hidden': 'true' }, [drawArcadeCabinet('#4cd6ff', 6)]);
+    const roomScene = el('div', { class: 'room-scene', 'aria-hidden': 'true' }, [
+      cabinetDecor,
+      el('div', { class: 'arcade-floor' }, [playerItem, padGrid]),
+      cabinetDecor2,
+    ]);
+
     body.appendChild(marquee);
     body.appendChild(hud);
     body.appendChild(message);
-    body.appendChild(el('div', { class: 'arcade-floor' }, [playerItem, padGrid]));
-    container.appendChild(el('div', { class: 'level2-scene' }, [frame, startOverlay]));
+    container.appendChild(el('div', { class: 'level2-scene split-scene' }, [roomScene, frame, startOverlay]));
 
     // Redraws the round counter and lives display. Called after any change
     // to `round` or `lives`.
@@ -186,6 +197,7 @@ export default {
         el('button', {
           class: 'cta-btn',
           onclick: () => {
+            sfx.confirm();
             lives = 3;
             overlay.remove();
             renderHud();

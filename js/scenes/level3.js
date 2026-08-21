@@ -8,7 +8,7 @@ import { sfx } from '../audio.js';
 import { glitchBurst, pulse } from '../fx.js';
 import { el, randInt } from '../utils.js';
 import { terminalFrame, showInterstitial } from './shared.js';
-import { drawDoor, drawPlayer } from '../sprites.js';
+import { drawDoor, drawPlayer, drawConduit } from '../sprites.js';
 
 const SIZE = 5;
 const AMBIENT_LINES = [
@@ -64,7 +64,11 @@ export default {
     const roomScene = el('div', { class: 'room-scene', 'aria-hidden': 'true' });
     const doorItem = el('div', { class: 'room-item' });
     const playerItem = el('div', { class: 'player-sprite' }, [drawPlayer('#ffb000', 6), el('span', {}, 'YOU')]);
-    roomScene.append(playerItem, doorItem);
+    // Ward-themed set dressing: exposed conduits with warning stripes,
+    // giving Sector 2's room more detail to match Sectors 0/1/3.
+    const conduitTop = el('div', { class: 'room-decor', 'aria-hidden': 'true' }, [drawConduit('#ffb000', 7)]);
+    const conduitBottom = el('div', { class: 'room-decor', 'aria-hidden': 'true' }, [drawConduit('#ff4d5e', 7)]);
+    roomScene.append(conduitTop, playerItem, doorItem, conduitBottom);
 
     // Redraws the ward door sprite as sealed or open based on grid state.
     // Called after every press() and on mount.
@@ -89,7 +93,7 @@ export default {
     body.appendChild(gridEl);
     body.appendChild(el('div', { class: 'breaker-controls' }, [resetBtn]));
     body.appendChild(ambient);
-    container.appendChild(el('div', { class: 'level3-scene' }, [roomScene, frame]));
+    container.appendChild(el('div', { class: 'level3-scene split-scene' }, [roomScene, frame]));
 
     // Redraws the move counter and powered-cell count. Called after every
     // press() and reset().

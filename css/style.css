@@ -476,10 +476,62 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .skip-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ========================================================================
+   Shared: split room/terminal layout (Sectors 0, 1, 2, 3)
+   ======================================================================== */
+
+/* True half/half split: room visual on one side, terminal on the other.
+   flex-wrap lets narrow desktop windows stack instead of overflowing. */
+.split-scene {
+  width: min(96vw, 1100px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1.25rem;
+}
+.split-scene > .room-scene { flex: 1 1 420px; max-width: 520px; }
+.split-scene > .term-frame { flex: 1 1 420px; max-width: 560px; width: auto; margin: 0; }
+
+/* non-interactive set-dressing dropped into a room-scene for atmosphere */
+.room-decor { display: flex; align-items: center; opacity: 0.85; }
+.room-decor canvas { image-rendering: pixelated; filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.12)); }
+
+.room-item--active { border-color: var(--accent, #39ff14); background: rgba(255, 255, 255, 0.05); }
+
+/* floating action icon (look/inventory/hint) shown briefly near the player */
+.action-icon {
+  position: absolute;
+  opacity: 0;
+  transform: translateY(6px) scale(0.7);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  filter: drop-shadow(0 0 6px rgba(255, 209, 102, 0.8));
+  pointer-events: none;
+}
+.action-icon--show { opacity: 1; transform: translateY(-22px) scale(1); }
+.player-sprite { position: relative; }
+
+/* the small popup terminal shown over the room visual once the player has
+   walked up to the terminal (Sector 0) */
+.terminal-popup {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  border: 2px solid var(--accent, #39ff14);
+  border-radius: 4px;
+  background: #030906;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+.terminal-popup-title { margin: 0; color: var(--accent, #39ff14); font-size: 0.95rem; }
+.terminal-popup-files { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+
+/* ========================================================================
    Level 1: terminal parser
    ======================================================================== */
 
-.level1-scene { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0.85rem; }
+.level1-scene { width: 100%; }
 .term-log { height: min(42vh, 380px); overflow-y: auto; display: flex; flex-direction: column; gap: 0.15rem; padding-right: 0.25rem; }
 .term-line { margin: 0; font-size: 1.15rem; }
 .term-echo { color: var(--fg-dim); }
@@ -568,7 +620,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
    Level 2: arcade zero
    ======================================================================== */
 
-.level2-scene { width: 100%; display: flex; justify-content: center; position: relative; }
+.level2-scene { position: relative; }
 .arcade-marquee {
   font-family: var(--font-display);
   font-size: 1rem;
@@ -628,7 +680,6 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
    Level 3: breaker ward
    ======================================================================== */
 
-.level3-scene { width: 100%; display: flex; justify-content: center; }
 .breaker-hud { display: flex; justify-content: space-between; font-size: 1.2rem; color: var(--fg-dim); }
 .breaker-grid {
   display: grid;
@@ -649,40 +700,49 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
    Level 4: vault breach
    ======================================================================== */
 
-.level4-scene { width: 100%; display: flex; justify-content: center; }
 .vault-badge { display: flex; align-items: center; gap: 0.6rem; font-family: var(--font-display); font-size: 0.6rem; color: #ff8a8a; }
 .vault-badge canvas { image-rendering: pixelated; filter: drop-shadow(0 0 6px rgba(255, 138, 138, 0.5)); }
 .vault-badge--open { color: #00ff9c; }
 .vault-badge--open canvas { filter: drop-shadow(0 0 10px rgba(0, 255, 156, 0.8)); }
 .vault-hud { display: flex; justify-content: space-between; font-size: 1.2rem; color: var(--fg-dim); }
-.vault-noise {
+
+/* generic "hidden token buried in noise" pattern, shared by the vault
+   (level4.js) and the core's log fragments (level5.js) */
+.noise-box {
   background: #030906;
   border: 1px solid #0f3324;
   padding: 0.75rem;
   border-radius: 4px;
   overflow-x: auto;
 }
-.vault-row { display: flex; align-items: center; gap: 0.4rem; white-space: nowrap; font-size: 1.05rem; }
-.vault-addr { color: #14663f; }
-.vault-noise-text { color: #1c8a56; }
-.vault-token {
+.noise-row { display: flex; align-items: center; gap: 0.4rem; white-space: nowrap; font-size: 1.05rem; }
+.noise-addr { color: #14663f; }
+.noise-text { color: #1c8a56; }
+.noise-token {
   color: #00ff9c;
   font-weight: bold;
   padding: 0 0.15rem;
   border-radius: 2px;
 }
-.vault-token:hover:not(:disabled) { background: rgba(0, 255, 156, 0.2); }
-.vault-token.used { color: #4a6a5c; text-decoration: line-through; }
-.vault-token.removed { color: #ff4d5e; text-decoration: line-through; }
-.vault-bracket { color: #ffd166; }
-.vault-bracket.used { color: #4a4a3a; }
+.noise-token:hover:not(:disabled) { background: rgba(0, 255, 156, 0.2); }
+.noise-token.used { color: #4a6a5c; text-decoration: line-through; }
+
 .vault-log { max-height: 30vh; overflow-y: auto; font-size: 1.05rem; }
 .vault-log-line { margin: 0.15rem 0; }
-.vault-hit { color: #00ff9c; }
 .vault-letter-hit { color: #00ff9c; font-weight: bold; text-shadow: 0 0 6px rgba(0, 255, 156, 0.7); }
-.vault-letter-miss { color: #4a6a5c; }
+.vault-letter-miss { color: #ff8a8a; }
 .vault-hint { color: #ffd166; }
 .vault-lock-msg { color: var(--danger); min-height: 1.4em; text-align: center; font-family: var(--font-display); font-size: 0.6rem; }
+
+/* Sector 3 room clue-card hotspots: unrevealed decor until clicked */
+.clue-hotspot canvas { filter: drop-shadow(0 0 4px rgba(0, 255, 156, 0.3)); }
+.clue-hotspot--revealed { color: #ffd166; }
+.clue-hotspot--revealed canvas { filter: drop-shadow(0 0 8px rgba(255, 209, 102, 0.7)); }
+
+/* 6-slot letter entry + A-Z grid, reusing level5's keypad-slot look */
+.vault-letter-slots .keypad-slot { width: 42px; height: 54px; font-size: 1.1rem; }
+.letter-grid { display: grid; grid-template-columns: repeat(9, minmax(28px, 38px)); gap: 0.3rem; justify-content: center; }
+.letter-btn { padding: 0.4rem 0; font-size: 0.95rem; }
 
 /* ========================================================================
    Level 5: the core
@@ -720,6 +780,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .numpad { display: grid; grid-template-columns: repeat(5, 44px); gap: 0.4rem; justify-content: center; }
 .numpad-btn { padding: 0.5rem 0; border: 2px solid var(--border); border-radius: 3px; background: var(--bg-panel-2); font-size: 1.1rem; }
 .numpad-btn:hover { border-color: #b967ff; color: #b967ff; }
+.core-attempts { text-align: center; color: var(--fg-dim); font-size: 0.95rem; }
 .core-status { text-align: center; font-family: var(--font-display); font-size: 0.65rem; min-height: 1.4em; color: var(--danger); }
 
 /* ========================================================================
@@ -756,6 +817,18 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 }
 .interstitial-heading { font-family: var(--font-display); font-size: 0.9rem; color: var(--accent); }
 .interstitial-beat { color: var(--fg-dim); min-height: 3em; font-size: 1.1rem; }
+.memory-beat { display: flex; align-items: center; gap: 0.6rem; color: #ffe9a8; font-style: italic; }
+.memory-beat-ghost { animation: memoryFlicker 1.4s steps(6, end) infinite; filter: drop-shadow(0 0 8px rgba(255, 233, 168, 0.7)); }
+@keyframes memoryFlicker {
+  0%, 100% { opacity: 1; }
+  40% { opacity: 0.35; }
+  55% { opacity: 0.9; }
+  70% { opacity: 0.5; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .memory-beat-ghost { animation: none; }
+}
+.memory-beat-label { min-height: 1.4em; }
 .shard-award { display: flex; align-items: center; gap: 0.75rem; border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 4px; }
 .shard-award-label { display: flex; flex-direction: column; text-align: left; font-size: 0.95rem; }
 .shard-digit { color: var(--accent); font-weight: bold; }
@@ -806,4 +879,56 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   .sector-label { order: 1; }
   .progress-wrap { order: 3; width: 100%; }
   .chrome-controls { order: 2; }
+}
+
+/* ========================================================================
+   Mobile: landscape prompt + whole-page scale-to-fit (js/mobile.js)
+
+   On phones we don't want the responsive rule above to kick in at all —
+   the desktop layout must render unchanged and simply be scaled down, so
+   js/mobile.js forces the layout viewport wide enough that none of this
+   file's breakpoints apply, then scales #viewport-scale uniformly.
+   ======================================================================== */
+
+/* Only takes effect once the early inline script in index.html's <head>
+   (which runs before first paint) detects a touch/no-hover device and
+   stamps this class on <html> — desktop viewers get none of this. */
+html.mobile-scaled #viewport-scale-outer { overflow: hidden; position: relative; }
+html.mobile-scaled #viewport-scale {
+  width: 1280px;
+  transform-origin: top left;
+}
+
+#landscape-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  background: var(--bg);
+  color: var(--fg);
+  text-align: center;
+  padding: 2rem;
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+#landscape-prompt.hide { opacity: 0; pointer-events: none; }
+#landscape-prompt .rotate-icon {
+  width: 48px;
+  height: 74px;
+  border: 4px solid var(--accent);
+  border-radius: 6px;
+  animation: rotatePhone 1.8s ease-in-out infinite;
+}
+@keyframes rotatePhone {
+  0%, 15% { transform: rotate(0deg); }
+  50%, 65% { transform: rotate(90deg); }
+  100% { transform: rotate(90deg); }
+}
+#landscape-prompt p { font-family: var(--font-display); font-size: 0.75rem; max-width: 20rem; line-height: 1.6; margin: 0; }
+@media (prefers-reduced-motion: reduce) {
+  #landscape-prompt .rotate-icon { animation: none; }
 }

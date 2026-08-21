@@ -6,8 +6,8 @@
 // instead of duplicating this markup.
 
 import { el } from '../utils.js';
-import { typeWriter, glitchBurst } from '../fx.js';
-import { drawShard } from '../sprites.js';
+import { typeWriter, glitchBurst, pulse } from '../fx.js';
+import { drawShard, drawGhost } from '../sprites.js';
 import { sfx } from '../audio.js';
 import { SECTORS } from '../state.js';
 
@@ -51,6 +51,7 @@ export function showInterstitial(container, opts) {
     shardDigit = null,
     ctaLabel = 'CONTINUE',
     onContinue = () => {},
+    finalBeat = false,
   } = opts;
 
   const sector = SECTORS[levelIndex];
@@ -62,8 +63,22 @@ export function showInterstitial(container, opts) {
     el('p', { class: 'interstitial-beat', id: 'beat-text' }),
   ]);
 
+  let shardWrap = null;
+  // "Memory discovered" beat: a flickering silhouette + typed line landing
+  // just before the shard reveal (or, on the final sector where no new
+  // shard is awarded, standing on its own) — ties every sector clear back
+  // to the ending's "every sector cleared was a memory" payoff.
+  const showMemoryBeat = shardDigit !== null || finalBeat;
+  if (showMemoryBeat) {
+    const memoryBeat = el('div', { class: 'memory-beat' }, [
+      drawGhost(sector.accent, 6, 'sprite sprite-ghost memory-beat-ghost'),
+      el('p', { class: 'memory-beat-label', id: 'memory-text' }),
+    ]);
+    panel.appendChild(memoryBeat);
+  }
+
   if (shardDigit !== null) {
-    const shardWrap = el('div', { class: 'shard-award' });
+    shardWrap = el('div', { class: 'shard-award' });
     const canvas = drawShard(sector.accent, 10);
     shardWrap.appendChild(canvas);
     shardWrap.appendChild(el('div', { class: 'shard-award-label' }, [
@@ -82,6 +97,14 @@ export function showInterstitial(container, opts) {
   sfx.success();
   glitchBurst(overlay, 300);
   typeWriter(panel.querySelector('#beat-text'), storyBeat, { speed: 14 });
+
+  if (showMemoryBeat) {
+    sfx.reveal();
+    const memoryText = shardDigit !== null ? 'MEMORY FRAGMENT RECOVERED...' : 'ALL MEMORY FRAGMENTS ALIGNED...';
+    typeWriter(panel.querySelector('#memory-text'), memoryText, { speed: 20 }).then(() => {
+      pulse(panel.querySelector('.memory-beat-ghost'), 'fx-pulse', 700);
+    });
+  }
   btn.focus();
   return overlay;
 }

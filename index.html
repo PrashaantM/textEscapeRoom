@@ -8,23 +8,52 @@
   <meta name="theme-color" content="#05070a" />
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
   <link rel="stylesheet" href="css/style.css" />
+  <!--
+    Mobile handling, part 1: runs synchronously before first paint (a
+    module script would defer until after parsing, causing a flash of
+    unscaled layout). Detects a touch/no-hover device, stamps
+    html.mobile-scaled so css/style.css's mobile rules apply, and widens
+    the layout viewport to a fixed desktop reference width so none of this
+    file's normal responsive breakpoints ever fire on mobile. Part 2 (the
+    actual scale-to-fit math + the landscape prompt) is js/mobile.js,
+    imported by js/main.js.
+  -->
+  <script>
+    (function () {
+      var isMobile = window.matchMedia('(pointer: coarse) and (hover: none)').matches;
+      if (isMobile) {
+        document.documentElement.classList.add('mobile-scaled');
+        var vp = document.querySelector('meta[name="viewport"]');
+        if (vp) vp.setAttribute('content', 'width=1280');
+      }
+    })();
+  </script>
 </head>
 <body>
-  <!-- Visual-only overlays, driven by fx.js (setCrtEnabled, flashScreen). -->
-  <div id="crt-overlay" aria-hidden="true"></div>
-  <div id="screen-flash" aria-hidden="true"></div>
+  <div id="landscape-prompt" hidden>
+    <div class="rotate-icon" aria-hidden="true"></div>
+    <p>ROTATE YOUR DEVICE TO LANDSCAPE</p>
+  </div>
 
-  <!-- Sector progress bar + mute/menu buttons, built by sceneManager.js's
-       renderChrome(); shown only while a level scene is active. -->
-  <header id="statusbar" hidden></header>
+  <div id="viewport-scale-outer">
+    <div id="viewport-scale">
+      <!-- Visual-only overlays, driven by fx.js (setCrtEnabled, flashScreen). -->
+      <div id="crt-overlay" aria-hidden="true"></div>
+      <div id="screen-flash" aria-hidden="true"></div>
 
-  <!-- The active scene's content is mounted here by sceneManager.js. -->
-  <main id="app" role="main" aria-live="polite"></main>
+      <!-- Sector progress bar + mute/menu buttons, built by sceneManager.js's
+           renderChrome(); shown only while a level scene is active. -->
+      <header id="statusbar" hidden></header>
 
-  <!-- Pause menu overlay, built by sceneManager.js's openMenu(). -->
-  <div id="pause-menu" hidden></div>
-  <!-- Toast shown by konami.js when the cheat code is entered. -->
-  <div id="konami-toast" role="status" aria-live="polite"></div>
+      <!-- The active scene's content is mounted here by sceneManager.js. -->
+      <main id="app" role="main" aria-live="polite"></main>
+
+      <!-- Pause menu overlay, built by sceneManager.js's openMenu(). -->
+      <div id="pause-menu" hidden></div>
+      <!-- Toast shown by konami.js when the cheat code is entered. -->
+      <div id="konami-toast" role="status" aria-live="polite"></div>
+    </div>
+  </div>
 
   <noscript>
     <p style="color:#d8f6e8;background:#05070a;padding:2rem;font-family:monospace;">

@@ -182,3 +182,109 @@ export function drawPadlock(accent = '#00ff9c', unit = 8, className = 'sprite sp
   b(5, 8, 2, 3, BG);
   return canvas;
 }
+
+// ---- action-indicator icons: shown briefly near the player sprite when
+// look/inventory/hint fire, so the room visual reacts to non-physical
+// actions too. Called by level1.js's playActionIcon().
+
+export function drawMagnifier(accent = '#39ff14', unit = 8, className = 'sprite sprite-icon') {
+  const { canvas, ctx } = makeCanvas(9, 9, unit, className);
+  const b = grid(ctx, unit);
+  b(1, 1, 5, 1, accent);
+  b(0, 2, 1, 3, accent);
+  b(6, 2, 1, 3, accent);
+  b(1, 5, 5, 1, accent);
+  b(6, 6, 1, 1, accent);
+  b(7, 7, 2, 2, accent);
+  return canvas;
+}
+
+export function drawBackpack(accent = '#39ff14', unit = 8, className = 'sprite sprite-icon') {
+  const { canvas, ctx } = makeCanvas(9, 9, unit, className);
+  const b = grid(ctx, unit);
+  b(2, 0, 5, 1, accent);
+  b(1, 1, 7, 7, '#20303d');
+  b(1, 1, 7, 1, accent);
+  b(3, 3, 3, 2, accent);
+  b(1, 7, 7, 1, accent);
+  return canvas;
+}
+
+export function drawLightbulb(accent = '#ffd166', unit = 8, className = 'sprite sprite-icon') {
+  const { canvas, ctx } = makeCanvas(9, 9, unit, className);
+  const b = grid(ctx, unit);
+  b(3, 0, 3, 1, accent);
+  b(2, 1, 5, 4, accent);
+  b(3, 5, 3, 1, '#20303d');
+  b(3, 6, 3, 1, accent);
+  b(3, 7, 3, 1, accent);
+  ctx.globalAlpha = 0.5;
+  b(3, 2, 1, 1, '#ffffff');
+  ctx.globalAlpha = 1;
+  return canvas;
+}
+
+// ---- room-decor props: small reusable set-dressing sprites, each sector
+// combines a few of these with its own accent color so Sectors 0-3 read as
+// distinct rooms rather than the same panel recolored.
+
+// A wall-mounted clue tag: used both as generic shelf/rack decor and (in
+// level4.js) as the "unrevealed" state of a vault clue-card hotspot.
+export function drawClueTag(accent = '#39ff14', unit = 8, className = 'sprite sprite-decor') {
+  const { canvas, ctx } = makeCanvas(10, 8, unit, className);
+  const b = grid(ctx, unit);
+  b(0, 0, 10, 8, '#161f1a');
+  b(0, 0, 10, 1, accent);
+  b(1, 2, 6, 1, '#3a4750');
+  b(1, 4, 4, 1, '#3a4750');
+  b(0, 7, 10, 1, accent);
+  return canvas;
+}
+
+// A small wall shelf/monitor rack. Sector 0 decor.
+export function drawShelf(accent = '#39ff14', unit = 8, className = 'sprite sprite-decor') {
+  const { canvas, ctx } = makeCanvas(14, 6, unit, className);
+  const b = grid(ctx, unit);
+  b(0, 4, 14, 2, '#3d2f20');
+  b(1, 0, 4, 4, '#20303d');
+  b(2, 1, 2, 1, accent);
+  b(7, 1, 5, 2, '#1c2733');
+  b(9, 2, 1, 2, accent);
+  return canvas;
+}
+
+// Arcade cabinet prop. Sector 1 decor.
+export function drawArcadeCabinet(accent = '#ff2fd0', unit = 8, className = 'sprite sprite-decor') {
+  const { canvas, ctx } = makeCanvas(10, 16, unit, className);
+  const b = grid(ctx, unit);
+  b(0, 0, 10, 16, '#2a1a33');
+  b(1, 1, 8, 5, '#0a0e12');
+  b(2, 2, 6, 3, accent);
+  b(0, 6, 10, 1, accent);
+  b(2, 8, 6, 3, '#3a2440');
+  b(3, 9, 1, 1, accent);
+  b(6, 9, 1, 1, accent);
+  return canvas;
+}
+
+// Wall conduit/pipe with warning stripe. Sector 2 decor.
+export function drawConduit(accent = '#ffb000', unit = 8, className = 'sprite sprite-decor') {
+  const { canvas, ctx } = makeCanvas(14, 6, unit, className);
+  const b = grid(ctx, unit);
+  b(0, 1, 14, 3, '#2a2210');
+  b(0, 2, 14, 1, accent);
+  for (let x = 0; x < 14; x += 4) b(x, 0, 2, 1, accent);
+  b(6, 4, 2, 2, '#151007');
+  return canvas;
+}
+
+// Security camera prop. Sector 3 decor.
+export function drawVaultCam(accent = '#00ff9c', unit = 8, className = 'sprite sprite-decor') {
+  const { canvas, ctx } = makeCanvas(10, 8, unit, className);
+  const b = grid(ctx, unit);
+  b(0, 2, 7, 4, '#20303d');
+  b(6, 3, 3, 2, '#0a0e12');
+  b(8, 3, 2, 2, accent);
+  b(2, 0, 2, 2, '#3a4750');
+  return canvas;
+}

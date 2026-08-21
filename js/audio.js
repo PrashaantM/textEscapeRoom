@@ -80,6 +80,11 @@ export const sfx = {
     }
   },
   coin: () => tone({ freq: 988, duration: 0.06, type: 'square', volume: 0.06, slideTo: 1568 }),
+  walk: () => tone({ freq: randRange(180, 220), duration: 0.035, type: 'square', volume: 0.025 }),
+  drawer: () => tone({ freq: 140, duration: 0.18, type: 'sawtooth', volume: 0.05, slideTo: 210 }),
+  terminalOpen: () => tone({ freq: 300, duration: 0.09, type: 'triangle', volume: 0.05, slideTo: 520 }),
+  pop: () => tone({ freq: 720, duration: 0.045, type: 'square', volume: 0.045 }),
+  reveal: () => tone({ freq: 440, duration: 0.1, type: 'triangle', volume: 0.06, slideTo: 660 }),
 };
 
 // Returns a random float in [a, b). Used by sfx.glitch() to scatter pitches.

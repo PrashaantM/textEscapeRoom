@@ -159,6 +159,7 @@ export default {
       const again = el('button', {
         class: 'cta-btn',
         onclick: () => {
+          sfx.select();
           if (confirm('Play again from the beginning?')) {
             resetGame();
             ctx.goTo('title');

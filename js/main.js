@@ -10,6 +10,7 @@ import { setCrtEnabled } from './fx.js';
 import { initKonamiWatcher } from './konami.js';
 import { goTo, openMenu, closeMenu, isMenuOpen } from './sceneManager.js';
 import { qs } from './utils.js';
+import { initMobile } from './mobile.js';
 
 // One-time app startup: seeds stats.startedAt on a fresh save, applies
 // persisted audio/CRT settings, starts the Konami watcher, wires the
@@ -17,6 +18,8 @@ import { qs } from './utils.js';
 // the saved (or default) scene. Called immediately below, once the DOM is
 // ready.
 function boot() {
+  initMobile();
+
   const state = getState();
   if (!state.stats.startedAt) state.stats.startedAt = Date.now();
 

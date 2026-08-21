@@ -5,6 +5,7 @@
 // state.scene is 'boot'; ctx.goTo('level1') advances the game.
 
 import { getState } from '../state.js';
+import { sfx } from '../audio.js';
 import { delay, el } from '../utils.js';
 import { typeInto } from './shared.js';
 
@@ -33,7 +34,7 @@ export default {
     const state = getState();
     const log = el('div', { class: 'boot-log' });
     const prompt = el('p', { class: 'boot-continue', hidden: true }, '[ PRESS ANY KEY OR CLICK TO CONTINUE ]');
-    const skip = el('button', { class: 'skip-btn', onclick: () => ctx.goTo('level1') }, 'SKIP ▶');
+    const skip = el('button', { class: 'skip-btn', onclick: () => { sfx.select(); ctx.goTo('level1'); } }, 'SKIP ▶');
 
     container.appendChild(el('div', { class: 'boot-scene' }, [log, prompt, skip]));
 

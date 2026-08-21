@@ -1,19 +1,29 @@
 // Scene: Sector 0, "BOOT-UP". A text-adventure-style puzzle where the
-// player types (or taps quick-command chips for) commands like `look`,
+// player types (or interacts with the room visual for) commands like `look`,
 // `ls -a`, `cat .access_code`, `open drawer`, and `unlock door <code>` to
 // find a hidden access code and a keycard, then unlock the door. Solving it
 // awards the first memory shard (codeDigits[0] in state.js) via
 // completeLevel(0, digit), then shows shared.js's interstitial and routes
 // to level2.
+//
+// The room visual (left half) and terminal (right half) are a genuine
+// split layout (`.split-scene`, shared with Sectors 2 and 3). Clicking the
+// terminal/desk/door walks the player sprite there (a FLIP-animated
+// reorder, see walkTo()) before that object's options appear — nothing is
+// offered up front except the 3 clickable room objects. The terminal's own
+// command parsing in run() is untouched; the room visual is purely an
+// additional way to trigger the same commands.
 
 import { completeLevel, getState } from '../state.js';
 import { sfx } from '../audio.js';
 import { shake, pulse } from '../fx.js';
 import { el, delay } from '../utils.js';
 import { terminalFrame, typeInto, showInterstitial } from './shared.js';
-import { drawDoor, drawDrawer, drawTerminal, drawKeycard, drawPlayer } from '../sprites.js';
+import { drawDoor, drawDrawer, drawTerminal, drawKeycard, drawPlayer, drawShelf, drawClueTag, drawMagnifier, drawBackpack, drawLightbulb } from '../sprites.js';
 
 const ROOM_DESC = "You're wedged into a server closet that smells of hot dust. A dead terminal hums awake. To your left: a steel door with a 3-digit keypad. Under the desk: a battered drawer. Taped to the monitor: a folder marked SECTOR LOGS.";
+
+const CHIP_LABELS = { 'ls -a': 'SHOW HIDDEN FILES' };
 
 const HELP_ROWS = [
   ['look', 'just look around the room'],
@@ -33,11 +43,38 @@ function normalizeFile(s) {
   return (s || '').replace(/^\.\//, '').trim();
 }
 
+// Animates `element` from `prevRect` (its bounding rect before some DOM
+// change already happened) to its current position, via the FLIP technique
+// (First-Last-Invert-Play): the element already sits at its new spot, so we
+// just offset it back to where it was and transition that offset to zero.
+// Used both for the player sprite "walking" between room objects and for
+// the keycard "flying" from the drawer into the player's hands. Resolves
+// once the transition ends (or after `duration` as a fallback).
+function flip(element, prevRect, duration = 420) {
+  const next = element.getBoundingClientRect();
+  const dx = prevRect.left - next.left;
+  const dy = prevRect.top - next.top;
+  if (!dx && !dy) return Promise.resolve();
+  element.style.transition = 'none';
+  element.style.transform = `translate(${dx}px, ${dy}px)`;
+  // eslint-disable-next-line no-unused-expressions
+  element.offsetWidth; // force reflow so the transform above applies before we animate away from it
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      element.style.transition = `transform ${duration}ms ease`;
+      element.style.transform = 'translate(0, 0)';
+      const done = () => { element.style.transition = ''; element.style.transform = ''; resolve(); };
+      element.addEventListener('transitionend', done, { once: true });
+      setTimeout(done, duration + 80);
+    });
+  });
+}
+
 export default {
   // Scene lifecycle entry point, called by sceneManager.js's mountScene()
   // when this scene becomes active. Sets up the room diorama, the terminal
-  // log/input, quick-command chips, and the command parser (run()), and
-  // kicks off the intro text.
+  // log/input, the room's own command parser (run()), and kicks off the
+  // intro text.
   mount(container, ctx) {
     const flags = { lookedAround: false, sawReadme: false, sawHiddenList: false, sawAccessCode: false, openedDrawer: false, hasKeycard: false, doorUnlocked: false };
     const inventory = [];
@@ -49,23 +86,96 @@ export default {
     let lastKeycardShown = false;
     let justActed = false;
     let doorPadOpen = false;
+    let activeTarget = null; // 'terminal' | 'desk' | 'door' | null
+    let terminalPopupOpen = false;
+    let walking = false;
+    let walkTimer = null;
 
-    // Click handler for the terminal sprite: runs 'look' first, then 'ls -a'
-    // on subsequent clicks, as a tap-friendly alternative to typing.
-    function onTerminalClick() {
-      submitCommand(!flags.lookedAround ? 'look' : 'ls -a');
+    const contextBar = el('div', { class: 'quick-commands context-bar', role: 'group', 'aria-label': 'Object options' });
+
+    // Plays a brief floating icon (magnifier/backpack/lightbulb) near the
+    // player sprite for non-physical actions (look/inventory/hint), so the
+    // room visual reacts to those too, not just clicks on objects. Called
+    // by run() whenever those verbs are handled.
+    function playActionIcon(kind) {
+      const playerEl = roomScene.querySelector('.player-sprite');
+      if (!playerEl) return;
+      const draw = kind === 'look' ? drawMagnifier : kind === 'inventory' ? drawBackpack : drawLightbulb;
+      const icon = draw('#ffd166', 5, 'sprite action-icon');
+      playerEl.appendChild(icon);
+      requestAnimationFrame(() => icon.classList.add('action-icon--show'));
+      setTimeout(() => icon.remove(), 900);
     }
 
-    // Click handler for the desk sprite: opens the drawer, then takes the
-    // keycard on the next click.
-    function onDeskClick() {
-      submitCommand(!flags.openedDrawer ? 'open drawer' : 'take keycard');
+    // Moves the player sprite to stand next to `target` ('terminal' | 'desk'
+    // | 'door') via renderRoomScene()'s existing DOM-order positioning,
+    // FLIP-animated into a real walk with footstep sound. Resolves once the
+    // walk finishes. Called by the object click handlers before revealing
+    // that object's context-bar options.
+    async function walkTo(target) {
+      if (walking) return;
+      const playerEl = roomScene.querySelector('.player-sprite');
+      const prevRect = playerEl ? playerEl.getBoundingClientRect() : null;
+      activeTarget = target;
+      contextBar.innerHTML = '';
+      terminalPopupOpen = false;
+      walking = true;
+      renderRoomScene();
+      const newPlayerEl = roomScene.querySelector('.player-sprite');
+      if (prevRect && newPlayerEl) {
+        sfx.walk();
+        walkTimer = setInterval(() => sfx.walk(), 140);
+        await flip(newPlayerEl, prevRect);
+        clearInterval(walkTimer);
+      }
+      walking = false;
     }
 
-    // Click handler for the door sprite: attempts the unlock command if the
-    // player lacks a keycard, otherwise toggles the on-screen numeric keypad.
-    function onDoorClick() {
+    // Click handler for the terminal sprite: walks the player there (unless
+    // already there), runs 'look' the first time (unchanged terminal
+    // output), then opens the small terminal popup (readme.txt /
+    // sector.log / .access_code) plus the context-bar chips for anything
+    // else the terminal offers.
+    async function onTerminalClick() {
+      if (activeTarget === 'terminal') {
+        if (walking) return;
+        terminalPopupOpen = !terminalPopupOpen;
+        renderRoomScene();
+        return;
+      }
+      await walkTo('terminal');
+      if (activeTarget !== 'terminal') return; // superseded by another click mid-walk
+      sfx.terminalOpen();
+      if (!flags.lookedAround) submitCommand('look');
+      terminalPopupOpen = true;
+      renderRoomScene();
+      renderContextBar();
+    }
+
+    // Click handler for the desk sprite: walks the player there (unless
+    // already there), then shows the drawer/keycard option relevant to
+    // current progress.
+    async function onDeskClick() {
+      if (activeTarget !== 'desk') {
+        await walkTo('desk');
+        if (activeTarget !== 'desk') return; // superseded by another click mid-walk
+      } else if (walking) {
+        return;
+      }
+      renderContextBar();
+    }
+
+    // Click handler for the door sprite: walks the player there (unless
+    // already there), then either attempts the unlock command (no keycard
+    // yet) or toggles the on-screen numeric keypad, exactly as before.
+    async function onDoorClick() {
       if (flags.doorUnlocked) return;
+      if (activeTarget !== 'door') {
+        await walkTo('door');
+        if (activeTarget !== 'door') return; // superseded by another click mid-walk
+      } else if (walking) {
+        return;
+      }
       if (!flags.hasKeycard) { submitCommand('unlock door'); return; }
       doorPadOpen = !doorPadOpen;
       renderRoomScene();
@@ -122,33 +232,58 @@ export default {
       ]);
     }
 
-    // Redraws the room diorama (door, desk, terminal, player, and the
+    // Builds the small popup terminal screen shown over the room visual
+    // once the player has walked up to the terminal: the same 3 file
+    // buttons the real terminal exposes via `cat`, routed through the exact
+    // same submitCommand() path so behavior is identical either way.
+    function buildTerminalPopup() {
+      return el('div', { class: 'terminal-popup' }, [
+        el('p', { class: 'terminal-popup-title' }, 'root@echo:~$'),
+        el('div', { class: 'terminal-popup-files' }, [
+          el('button', { class: 'cmd-chip', onclick: () => submitCommand('cat readme.txt') }, 'readme.txt'),
+          el('button', { class: 'cmd-chip', onclick: () => submitCommand('cat sector.log') }, 'sector.log'),
+          el('button', { class: 'cmd-chip', onclick: () => submitCommand('cat .access_code') }, '.access_code'),
+        ]),
+      ]);
+    }
+
+    // Redraws the room diorama (door, desk, terminal, player, decor, and the
     // keycard once acquired) based on current `flags`, and positions the
-    // player sprite next to whatever the player should focus on next.
-    // Called after every flag-changing command and by the click handlers.
+    // player sprite next to whatever object is currently active (or, if
+    // none has been clicked yet, a neutral starting spot). Called after
+    // every flag-changing command and by the click handlers.
     function renderRoomScene() {
       roomScene.innerHTML = '';
+
+      // Static set-dressing: a wall shelf and a taped-up log folder, purely
+      // decorative, giving Sector 0 more room detail to match Sectors 1-3.
+      const shelfDecor = el('div', { class: 'room-decor', 'aria-hidden': 'true' }, [drawShelf('#39ff14', 6)]);
+      const folderDecor = el('div', { class: 'room-decor', 'aria-hidden': 'true' }, [drawClueTag('#39ff14', 5)]);
+      roomScene.append(shelfDecor);
+
       const doorItem = el('button', {
-        class: 'room-item room-item-btn',
+        class: 'room-item room-item-btn' + (activeTarget === 'door' ? ' room-item--active' : ''),
         'aria-label': flags.doorUnlocked ? 'Door, already open' : 'Steel door with a keypad',
         onclick: onDoorClick,
       }, [drawDoor(!flags.doorUnlocked, 8), el('span', {}, flags.doorUnlocked ? 'DOOR: OPEN' : 'DOOR: LOCKED')]);
       const deskItem = el('button', {
-        class: 'room-item room-item-btn',
+        class: 'room-item room-item-btn' + (activeTarget === 'desk' ? ' room-item--active' : ''),
         'aria-label': flags.openedDrawer ? 'Desk drawer, already open' : 'Desk with a battered drawer',
         onclick: onDeskClick,
       }, [drawDrawer(flags.openedDrawer, 8), el('span', {}, flags.openedDrawer ? 'DESK: OPEN' : 'DESK: SHUT')]);
       const termItem = el('button', {
-        class: 'room-item room-item-btn',
+        class: 'room-item room-item-btn' + (activeTarget === 'terminal' ? ' room-item--active' : ''),
         'aria-label': 'Terminal',
         onclick: onTerminalClick,
-      }, [drawTerminal(8), el('span', {}, 'TERMINAL')]);
+      }, [drawTerminal(8), folderDecor, el('span', {}, 'TERMINAL')]);
 
-      // player stands next to whatever the player should focus on next
-      const target = !flags.sawAccessCode ? termItem : !flags.hasKeycard ? deskItem : doorItem;
+      // player stands next to whatever was last clicked, or a neutral
+      // "just walked in" spot (between the desk and the door) before
+      // anything has been clicked yet, so the very first click still walks.
+      const target = activeTarget === 'desk' ? deskItem : activeTarget === 'terminal' ? termItem : activeTarget === 'door' ? doorItem : null;
       const playerItem = el('div', { class: 'player-sprite' }, [drawPlayer('#39ff14', 6), el('span', {}, 'YOU')]);
       const items = [termItem, deskItem, doorItem];
-      items.splice(items.indexOf(target), 0, playerItem);
+      items.splice(target ? items.indexOf(target) : 2, 0, playerItem);
       roomScene.append(...items);
 
       if (flags.hasKeycard) {
@@ -160,13 +295,12 @@ export default {
       if (flags.doorUnlocked) { pulse(doorItem, 'fx-pulse', 700); doorPadOpen = false; }
       if (justActed) { pulse(playerItem, 'fx-pulse', 700); justActed = false; }
       if (doorPadOpen && flags.hasKeycard && !flags.doorUnlocked) roomScene.appendChild(buildDoorPad());
+      if (terminalPopupOpen && activeTarget === 'terminal') roomScene.appendChild(buildTerminalPopup());
     }
 
     const frame = terminalFrame({ title: 'SECTOR 0 // BOOT-UP :: root@echo:~$', accent: '#39ff14' });
     const log = el('div', { class: 'term-log', id: 'l1-log', role: 'log', 'aria-live': 'polite' });
 
-    // ---- quick-command chips: tap instead of typing ----
-    const quickBar = el('div', { class: 'quick-commands', role: 'group', 'aria-label': 'Quick commands' });
     const inputRow = el('div', { class: 'term-input-row' }, [
       el('span', { class: 'term-prompt' }, '>'),
       el('input', {
@@ -179,9 +313,9 @@ export default {
     ]);
     const body = frame.querySelector('.term-body');
     body.appendChild(log);
-    body.appendChild(quickBar);
+    body.appendChild(contextBar);
     body.appendChild(inputRow);
-    container.appendChild(el('div', { class: 'level1-scene' }, [roomScene, frame]));
+    container.appendChild(el('div', { class: 'level1-scene split-scene' }, [roomScene, frame]));
 
     const input = inputRow.querySelector('input');
 
@@ -191,7 +325,7 @@ export default {
       const p = el('p', { class: `term-line ${cls}`.trim() });
       log.appendChild(p);
       log.scrollTop = log.scrollHeight;
-      return typeInto(p, text, { speed: 6, sound: false });
+      return typeInto(p, text, { speed: 6 });
     }
 
     // Prints several lines in sequence via printRaw(). Used for multi-line
@@ -201,13 +335,14 @@ export default {
     }
 
     // Builds a clickable chip that runs `cmd` through submitCommand() when
-    // tapped, showing `label` (or the command itself) as its text. Used by
-    // the quick-command bar, help table, hint text, and file listings.
+    // tapped, showing `label` (or a friendly label for `cmd`, or the raw
+    // command) as its text. Used by the context bar, help table, hint text,
+    // and file listings.
     function cmdChip(cmd, label) {
       return el('button', {
         class: 'cmd-chip',
         onclick: () => submitCommand(cmd),
-      }, label || cmd);
+      }, label || CHIP_LABELS[cmd] || cmd);
     }
 
     // Appends an arbitrary DOM node (not typed text) to the terminal log.
@@ -230,22 +365,22 @@ export default {
       printNode(table);
     }
 
-    // Rebuilds the row of tap-friendly command chips to show only actions
-    // relevant to the player's current progress (based on `flags`). Called
-    // after every state-changing command and once on mount.
-    function renderQuickBar() {
-      quickBar.innerHTML = '';
+    // Rebuilds the context bar to show only the options relevant to
+    // `activeTarget` (populated once a walk finishes) — nothing is shown
+    // until the player has clicked an object. Called after walkTo()
+    // resolves and after every flag-changing command.
+    function renderContextBar() {
+      contextBar.innerHTML = '';
       const chips = [];
-      if (!flags.lookedAround) {
-        chips.push(['look', 'LOOK']);
-      } else {
-        if (!flags.sawHiddenList) chips.push(['ls -a', 'LS -A']);
+      if (activeTarget === 'terminal') {
+        if (!flags.sawHiddenList) chips.push(['ls -a', CHIP_LABELS['ls -a']]);
+        chips.push(['inventory', 'INVENTORY']);
+        chips.push(['hint', 'HINT']);
+      } else if (activeTarget === 'desk') {
         if (!flags.openedDrawer) chips.push(['open drawer', 'OPEN DRAWER']);
+        else if (!flags.hasKeycard) chips.push(['take keycard', 'TAKE KEYCARD']);
       }
-      if (flags.openedDrawer && !flags.hasKeycard) chips.push(['take keycard', 'TAKE KEYCARD']);
-      chips.push(['inventory', 'INVENTORY']);
-      chips.push(['hint', 'HINT']);
-      quickBar.append(...chips.map(([cmd, label]) => cmdChip(cmd, label)));
+      contextBar.append(...chips.map(([cmd, label]) => cmdChip(cmd, label)));
     }
 
     // Prints a row of `cat <file>` chips for the given filenames. Called by
@@ -325,7 +460,10 @@ export default {
     // The command parser: normalizes the typed/tapped input, splits it into
     // a verb and arguments, and dispatches to the matching room action
     // (look, ls, cat, open, take, inventory, unlock, hint, etc). Called by
-    // submitCommand() for every command the player enters.
+    // submitCommand() for every command the player enters. Unchanged from
+    // the original in every way except: playActionIcon()/sfx calls added
+    // for the room-visual reactions, and renderContextBar() calls so the
+    // context bar stays in sync when a command changes progress.
     async function run(raw) {
       const cmd = raw.trim().toLowerCase().replace(/\s+/g, ' ');
       if (!cmd) return;
@@ -335,12 +473,13 @@ export default {
       if (['help', 'h', '?'].includes(verb)) return printHelp();
       if (['look', 'l'].includes(verb)) {
         flags.lookedAround = true;
-        renderQuickBar();
+        playActionIcon('look');
+        renderContextBar();
         return printRaw(ROOM_DESC);
       }
       if (verb === 'ls' && /(-a|a)$/.test(args)) {
         flags.sawHiddenList = true;
-        renderQuickBar();
+        renderContextBar();
         return printFileList(['readme.txt', 'sector.log', '.access_code']);
       }
       if (verb === 'ls') return printFileList(['readme.txt', 'sector.log']);
@@ -357,6 +496,7 @@ export default {
           flags.sawHiddenList = true;
           flags.sawAccessCode = true;
           renderRoomScene();
+          renderContextBar();
           return printLines(['OVERRIDE FRAGMENT RECOVERED...', 'KEYPAD CODE: 7-3-9']);
         }
         return printRaw(`cat: ${file || '(missing file)'}: No such file`, 'term-error');
@@ -365,22 +505,28 @@ export default {
         if (flags.openedDrawer) return printRaw(flags.hasKeycard ? 'The drawer is open and empty.' : 'The drawer is already open. The keycard is still there.');
         flags.openedDrawer = true;
         justActed = true;
+        sfx.drawer();
         renderRoomScene();
-        renderQuickBar();
+        renderContextBar();
         return printRaw('The drawer sticks, then gives way with a groan. Inside: a keycard, still faintly warm.');
       }
       if (['take', 'get', 'grab'].includes(verb) && (args.includes('keycard') || args.includes('card'))) {
         if (flags.hasKeycard) return printRaw('You already have the keycard.');
         if (!flags.openedDrawer) return printRaw("There's nothing to take here yet.");
+        const deskEl = roomScene.querySelector('.room-item-btn[aria-label*="drawer"]');
+        const prevRect = deskEl ? deskEl.getBoundingClientRect() : null;
         flags.hasKeycard = true;
         inventory.push('Keycard');
         sfx.select();
         justActed = true;
         renderRoomScene();
-        renderQuickBar();
+        renderContextBar();
+        const cardEl = roomScene.querySelector('.room-item--acquired canvas');
+        if (prevRect && cardEl) flip(cardEl, prevRect, 500);
         return printRaw('KEYCARD acquired.', 'term-success');
       }
       if (['inventory', 'inv', 'i'].includes(verb)) {
+        playActionIcon('inventory');
         return printRaw(inventory.length ? `Carrying: ${inventory.join(', ')}` : 'Your pockets are empty.');
       }
       if (verb === 'clear') { log.innerHTML = ''; return; }
@@ -389,7 +535,7 @@ export default {
       if (verb === 'use' && args.includes('keycard')) {
         return printRaw(flags.hasKeycard ? 'The keypad blinks, waiting for a code.' : "You don't have a keycard to use.");
       }
-      if (verb === 'hint') return printHint();
+      if (verb === 'hint') { playActionIcon('hint'); return printHint(); }
       return printRaw(`SECTOR 0: command not recognized. Type 'help'.`, 'term-error');
     }
 
@@ -423,7 +569,6 @@ export default {
     container.addEventListener('click', () => input.focus({ preventScroll: true }), { signal: ctx.signal });
 
     renderRoomScene();
-    renderQuickBar();
     printLines(['TERMINAL READY.', 'Click the terminal, desk, or door to act, or type a command below.']).then(() => input.focus({ preventScroll: true }));
   },
 };
