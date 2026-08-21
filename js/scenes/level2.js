@@ -52,7 +52,12 @@ function techProps() {
     { id: 'tp-ebox', x: 70, y: 22, node: () => drawElectricalBox(6), label: 'Electrical box', desc: 'Breakers, all flipped the wrong way. Not worth resetting.' },
     { id: 'tp-vent-1', x: 22, y: 34, node: () => drawVentProp(6), label: 'Vent grate', desc: 'A vent grate, ticking behind the grille.' },
     { id: 'tp-vent-2', x: 78, y: 36, node: () => drawVentProp(6), label: 'Vent grate', desc: 'Warm air bleeds out. Something back there still runs.' },
-    { id: 'tp-panel', x: 15, y: 48, node: () => drawControlPanel('#ff2fd0', 7), label: 'Control panel', desc: "The panel spits sparks whenever the base current shifts. You don't touch it twice." },
+    // x kept well clear of door-barricaded's x:15 below — this close to the
+    // room's corner seam, the real 3D side wall compresses items toward a
+    // vanishing point, so two wall hotspots sharing a near-identical x (as
+    // this and the door briefly did) end up overlapping on screen and
+    // shadow each other's clicks even though their y differs.
+    { id: 'tp-panel', x: 9, y: 48, node: () => drawControlPanel('#ff2fd0', 7), label: 'Control panel', desc: "The panel spits sparks whenever the base current shifts. You don't touch it twice." },
     // ---- floor ----
     { id: 'tp-pod-1', x: 14, y: 76, node: () => drawGlassPod('#ff8a8a', 8), label: 'Cracked containment pod', desc: 'The glass is fogged over. You choose not to wonder why.' },
     { id: 'tp-pod-2', x: 52, y: 90, node: () => drawGlassPod('#ff8a8a', 7), label: 'Cracked containment pod', desc: "Empty, or empty enough that you don't check twice." },

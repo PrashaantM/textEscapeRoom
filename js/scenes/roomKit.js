@@ -14,14 +14,78 @@ import { drawPlayer } from '../sprites.js';
 
 const FOOTSTEP_MS = 150;
 
-// The room backdrop (see .room-scene--free in style.css) is a stylized
-// corner: a left wall and a back wall meeting at a seam, sitting on a
-// floor. These percentages describe where that seam and horizon actually
-// fall, so every sector's object table can place wall-mounted things
-// (lights, posters, monitors) inside the wall band and freestanding
-// furniture (crates, desks, tanks) on the floor instead of guessing.
+// The room is a real 3D corner (see .room-scene--free/.room-3d in
+// style.css): a side wall and a back wall, each an actual
+// `transform-style:preserve-3d` plane under a shared `perspective`, meeting
+// at a corner above a tilted floor plane — not a flat image faking one.
+// These percentages describe where the wall band ends and the floor begins
+// (ROOM_HORIZON), and where wall-mounted items split between the two walls
+// (ROOM_CORNER), in the same flat 0-100 coordinate space every sector's
+// object table already uses. classify() below is what actually turns an
+// (x, y) pair from that table into "which plane, and where on it" — the
+// object tables themselves never needed to change when the room went 3D.
 export const ROOM_HORIZON = 62; // y% — the wall/floor seam. Wall: y < this. Floor: y >= this.
-export const ROOM_CORNER = 16; // x% — the left-wall/back-wall seam, wall band only.
+export const ROOM_CORNER = 16; // x% — the side-wall/back-wall seam, wall band only.
+
+// Sorts a flat (x, y) percentage into a plane ('wall-side' | 'wall-back' |
+// 'floor') plus that plane's own *local* left/top percentages. Wall-side
+// items (x < ROOM_CORNER) get their x rescaled from [0, ROOM_CORNER) to
+// [0, 100) so they spread across that wall's full physical depth instead of
+// clustering in a sliver; wall-back items keep x as-is (a plain subset of
+// the wall's full width, leaving breathing room near the corner where
+// perspective foreshortening is steepest). Every wall item's y rescales
+// from [0, ROOM_HORIZON) to [0, 100) — 0 at the ceiling line, 100 at the
+// floor line — which is what keeps interactive fixtures (terminals, doors,
+// monitor banks) sitting at roughly head height rather than crouched at
+// the very bottom or lost near the ceiling. Floor items rescale y from
+// [ROOM_HORIZON, 100] to [0, 100] as depth (0 = far, right at the wall
+// base; 100 = nearest the camera), x passing through unchanged.
+function classify(x, y) {
+  if (y < ROOM_HORIZON) {
+    const ly = (y / ROOM_HORIZON) * 100;
+    if (x < ROOM_CORNER) return { plane: 'wall-side', lx: (x / ROOM_CORNER) * 100, ly };
+    return { plane: 'wall-back', lx: x, ly };
+  }
+  const ly = ((Math.min(y, 100) - ROOM_HORIZON) / (100 - ROOM_HORIZON)) * 100;
+  return { plane: 'floor', lx: x, ly };
+}
+
+// Converts an arbitrary (x, y) click/walk target into a point the player
+// can actually stand on: always the floor plane, at that x, and at y
+// clamped up to ROOM_HORIZON — so a target inside the wall band (a
+// wall-mounted hotspot, or an open-floor click that landed on the wall's
+// on-screen area) resolves to the floor point right at that wall's base
+// instead of walking the player into the wall itself.
+function floorTarget(x, y) {
+  return { x, y: Math.max(y, ROOM_HORIZON) };
+}
+
+// Projects a floor-local (lx, ly) — lx 0-100 across the room, ly 0-100 in
+// depth (0 = far, right at the wall base; 100 = nearest the camera) — onto
+// the room's own flat screen percentages, plus a --depth-scale factor.
+// Sprites standing on the floor (the player, floor decor/hotspots, the
+// speech bubble) are plain 2D elements positioned by this, layered over
+// the real 3D wall/floor planes, rather than living inside the floor
+// plane's own rotateX(90deg) transform: a canvas nested two rotate()s deep
+// under a shared `perspective` doesn't reliably paint (confirmed — an
+// ordinary div in the same spot renders fine, a <canvas> there doesn't, in
+// every engine this was tried in), so this hand-tuned perspective
+// approximation gets the same "nearer = bigger, lower, more spread out"
+// read without ever putting a canvas inside a 3D transform.
+function projectFloor(lx, ly) {
+  // spread/scale are deliberately gentler than a literal perspective
+  // projection would be: several sectors place floor props as little as a
+  // few percent apart (fine under the old flat, unscaled layout), and a
+  // sharper convergence toward the vanishing point packed those neighbors
+  // close enough on screen to shadow each other's clicks. This keeps a
+  // real "nearer/bigger, farther/smaller" read without recreating that.
+  const t = Math.max(0, Math.min(1, ly / 100));
+  const scale = 0.5 + 0.65 * t;
+  const spread = 0.42 + 0.58 * t;
+  const yPct = ROOM_HORIZON + (t ** 1.6) * (100 - ROOM_HORIZON);
+  const xPct = 50 + (lx - 50) * spread;
+  return { xPct, yPct, scale };
+}
 
 // Creates a walkable room: a `position:relative` box (room-scene--free) that
 // fills its half of the split-scene layout. Returns an API for scattering
@@ -32,11 +96,34 @@ export const ROOM_CORNER = 16; // x% — the left-wall/back-wall seam, wall band
 // isn't a hotspot or an open popup just walks the player there.
 export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
   const roomEl = el('div', { class: 'room-scene room-scene--free', style: `--accent:${accent}`, role: 'group', 'aria-label': ariaLabel });
-  const decorLayer = el('div', { class: 'room-decor-layer', 'aria-hidden': 'true' });
-  const hotspotLayer = el('div', { class: 'room-hotspot-layer' });
-  const playerWrap = el('div', { class: 'room-player', style: 'left:50%; top:60%' });
+
+  // The two wall faces are real 3D planes (see style.css) with their own
+  // item layer each; setDecor()/setHotspot() route wall-mounted items into
+  // whichever one classify() picks, and those genuinely live inside the
+  // rotated plane. The floor face is background-only (see projectFloor()
+  // above for why) — everything standing on it renders instead in
+  // floorSprites, a flat 2D layer stacked on top of the whole 3D stage.
+  const wallSideLayer = el('div', { class: 'room-layer' });
+  const wallBackLayer = el('div', { class: 'room-layer' });
+  const wallSideFace = el('div', { class: 'room-face room-wall-side' }, [wallSideLayer]);
+  const wallBackFace = el('div', { class: 'room-face room-wall-back' }, [wallBackLayer]);
+  const floorFace = el('div', { class: 'room-face room-floor' });
+  const stage3d = el('div', { class: 'room-3d' }, [wallSideFace, wallBackFace, floorFace]);
+  const floorSprites = el('div', { class: 'room-floor-sprites' });
+  roomEl.append(stage3d, floorSprites);
+
+  const layers = { 'wall-side': wallSideLayer, 'wall-back': wallBackLayer };
+
+  // Player and bubble are floor-plane citizens (positioned from local
+  // floor-depth coordinates via projectFloor()), appended once into the
+  // flat floorSprites overlay. Initial spot matches playerXY below (50, 8).
+  const initialSpot = projectFloor(50, 8);
+  const playerWrap = el('div', {
+    class: 'room-player',
+    style: `left:${initialSpot.xPct}%; top:${initialSpot.yPct}%; --depth-scale:${initialSpot.scale}`,
+  });
   const bubbleEl = el('div', { class: 'room-bubble', hidden: true });
-  roomEl.append(decorLayer, hotspotLayer, playerWrap, bubbleEl);
+  floorSprites.append(playerWrap, bubbleEl);
 
   // Open-floor click-to-walk, shared by every sector that uses createRoom()
   // instead of each scene file wiring its own copy. Excludes clicks on a
@@ -53,11 +140,11 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
     walkToPoint(x, y);
   });
 
-  const hotspots = new Map(); // id -> { x, y, btn }
+  const hotspots = new Map(); // id -> { x, y, plane, btn }
   let legPhase = 0;
   let walking = false;
   let activeId = null;
-  let playerXY = { x: 50, y: 60 };
+  let playerXY = { x: 50, y: 8 }; // floor-local (lx, ly) — matches playerWrap's initial style above
 
   function drawPlayerFrame() {
     playerWrap.innerHTML = '';
@@ -65,48 +152,75 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
   }
   drawPlayerFrame();
 
+  // Positions `node` at world (x, y): wall items get plain left/top inside
+  // their rotated plane's own layer; floor items get projectFloor()'s
+  // screen-space left/top plus a --depth-scale custom property, inside the
+  // flat floorSprites overlay (see the .room-layer/.room-floor-sprites
+  // comments in style.css for why floor items can't just nest in the
+  // floor's own 3D transform like wall items do).
+  function place(node, modifierBase, x, y) {
+    const { plane, lx, ly } = classify(x, y);
+    if (plane === 'floor') {
+      const { xPct, yPct, scale } = projectFloor(lx, ly);
+      node.style.left = `${xPct}%`;
+      node.style.top = `${yPct}%`;
+      node.style.setProperty('--depth-scale', scale);
+      floorSprites.appendChild(node);
+    } else {
+      node.classList.add(`${modifierBase}--wall`);
+      node.style.left = `${lx}%`;
+      node.style.top = `${ly}%`;
+      layers[plane].appendChild(node);
+    }
+    return plane;
+  }
+
   // Replaces all background set-dressing. `items` is a list of
-  // { x, y, node } as percentage coordinates within the room. Purely
-  // decorative — never clickable, never re-rendered per-interaction, so
-  // callers can just set this once at mount.
+  // { x, y, node } as world percentage coordinates (see classify() above).
+  // Purely decorative — never clickable, never re-rendered per-interaction,
+  // so callers can just set this once at mount.
   function setDecor(items) {
-    decorLayer.innerHTML = '';
+    [...roomEl.querySelectorAll('.room-decor-item')].forEach((n) => n.remove());
     items.forEach(({ x, y, node }) => {
-      node.style.left = `${x}%`;
-      node.style.top = `${y}%`;
-      decorLayer.appendChild(node);
+      const wrap = el('div', { class: 'room-decor-item', 'aria-hidden': 'true' }, [node]);
+      place(wrap, 'room-decor-item', x, y);
     });
   }
 
-  // Adds (or replaces) a clickable hotspot at percentage position (x, y).
-  // `build()` returns the child nodes to show (sprite + label);
+  // Adds (or replaces) a clickable hotspot at world percentage position
+  // (x, y). `build()` returns the child nodes to show (sprite + label);
   // `onClick(id)` fires on click/tap. `active` styling is applied whenever
   // this hotspot is the current walk target. Called by each sector's room
   // setup and again whenever a hotspot's own visual needs to change (pass
   // the same id to replace it in place).
   function setHotspot(id, { x, y, build, onClick, label }) {
     const prev = hotspots.get(id);
+    if (prev) prev.btn.remove();
     const btn = el('button', {
       class: 'room-hotspot' + (activeId === id ? ' room-hotspot--active' : ''),
-      style: `left:${x}%; top:${y}%`,
       'aria-label': label || id,
       onclick: () => onClick && onClick(id),
     }, build());
-    if (prev) prev.btn.replaceWith(btn);
-    else hotspotLayer.appendChild(btn);
-    hotspots.set(id, { x, y, btn });
+    const plane = place(btn, 'room-hotspot', x, y);
+    hotspots.set(id, { x, y, plane, btn });
     return btn;
   }
 
-  // Instantly places the player at (x, y) with no walk animation and no
-  // footstep sound — for teleports that aren't a walk at all, like
-  // stepping through a door into a whole new room. Called by scenes with
-  // more than one room right after rebuilding the new room's hotspots.
+  // Instantly places the player at world (x, y) — clamped onto the floor,
+  // same as any walk target (see floorTarget() above) — with no walk
+  // animation and no footstep sound, for teleports that aren't a walk at
+  // all, like stepping through a door into a whole new room. Called by
+  // scenes with more than one room right after rebuilding the new room's
+  // hotspots.
   function placeAt(x, y) {
-    playerXY = { x, y };
+    const t = floorTarget(x, y);
+    const { lx, ly } = classify(t.x, t.y);
+    playerXY = { x: lx, y: ly };
+    const { xPct, yPct, scale } = projectFloor(lx, ly);
     playerWrap.classList.add('room-player--jump');
-    playerWrap.style.left = `${x}%`;
-    playerWrap.style.top = `${y}%`;
+    playerWrap.style.left = `${xPct}%`;
+    playerWrap.style.top = `${yPct}%`;
+    playerWrap.style.setProperty('--depth-scale', scale);
     // Force layout so the position above applies before the class comes
     // back off, otherwise the browser can coalesce both style changes into
     // one frame and animate the jump anyway.
@@ -131,17 +245,22 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
     activeId = null;
   }
 
-  // Shared walk animation: interpolates the player to (x, y) with the
-  // real 2-frame leg-cycle animation (a footstep tick alternates legPhase
-  // and redraws the sprite, in sync with sfx.walk()), resolving once the
-  // CSS transition ends. A no-op (resolves immediately) if already
-  // walking or already there. Used by both walkTo() (a named hotspot) and
-  // walkToPoint() (an arbitrary click on open floor).
+  // Shared walk animation: interpolates the player to world (x, y) —
+  // resolved onto the floor plane exactly like any walk target (see
+  // floorTarget() above), so a wall-mounted hotspot's own (x, y) walks the
+  // player up to the floor point at that wall's base rather than into the
+  // wall — with the real 2-frame leg-cycle animation (a footstep tick
+  // alternates legPhase and redraws the sprite, in sync with sfx.walk()),
+  // resolving once the CSS transition ends. A no-op (resolves immediately)
+  // if already walking or already there. Used by both walkTo() (a named
+  // hotspot) and walkToPoint() (an arbitrary click on open floor).
   function walkToXY(x, y) {
     return new Promise((resolve) => {
       if (walking) { resolve(); return; }
-      const dx = x - playerXY.x;
-      const dy = y - playerXY.y;
+      const t = floorTarget(x, y);
+      const { lx, ly } = classify(t.x, t.y);
+      const dx = lx - playerXY.x;
+      const dy = ly - playerXY.y;
       if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) { resolve(); return; }
 
       walking = true;
@@ -153,9 +272,11 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
         sfx.walk();
       }, FOOTSTEP_MS);
 
-      playerXY = { x, y };
-      playerWrap.style.left = `${playerXY.x}%`;
-      playerWrap.style.top = `${playerXY.y}%`;
+      playerXY = { x: lx, y: ly };
+      const { xPct, yPct, scale } = projectFloor(lx, ly);
+      playerWrap.style.left = `${xPct}%`;
+      playerWrap.style.top = `${yPct}%`;
+      playerWrap.style.setProperty('--depth-scale', scale);
 
       const done = () => {
         clearInterval(footstep);
@@ -203,8 +324,9 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
   function showBubble(items) {
     bubbleEl.innerHTML = '';
     bubbleEl.hidden = false;
-    bubbleEl.style.left = `${playerXY.x}%`;
-    bubbleEl.style.top = `${playerXY.y}%`;
+    const { xPct, yPct } = projectFloor(playerXY.x, playerXY.y);
+    bubbleEl.style.left = `${xPct}%`;
+    bubbleEl.style.top = `${yPct}%`;
     items.forEach(({ label, onClick }) => {
       bubbleEl.appendChild(el('button', { class: 'room-bubble-btn', onclick: onClick }, label));
     });

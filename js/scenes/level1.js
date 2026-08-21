@@ -76,7 +76,10 @@ function buildProps() {
     },
     // ---- freestanding furniture and floor clutter (y>66) ----
     { id: 'prop-cabinet-1', x: 10, y: 74, node: () => drawCabinet('#39ff14', 7, undefined, 2), label: 'Supply cabinet', desc: 'A supply cabinet. Empty hangers rattle when you nudge it.' },
-    { id: 'prop-cabinet-2', x: 27, y: 70, node: () => drawCabinet('#39ff14', 7, undefined, 3), label: 'Bolted cabinet', desc: "Bolted shut. Someone stenciled 'DO NOT' on it; the rest flaked off." },
+    // x nudged from its original 27 — that close to the box's own x:32,
+    // roomKit's depth-based perspective scale made this cabinet and the
+    // (puzzle-critical) box overlap heavily on screen at this depth.
+    { id: 'prop-cabinet-2', x: 19, y: 70, node: () => drawCabinet('#39ff14', 7, undefined, 3), label: 'Bolted cabinet', desc: "Bolted shut. Someone stenciled 'DO NOT' on it; the rest flaked off." },
     { id: 'prop-locker-1', x: 43, y: 72, node: () => drawLocker('#39ff14', 7), label: 'Dented locker', desc: 'A gym locker, dented like it lost a fight.' },
     { id: 'prop-locker-2', x: 50, y: 72, node: () => drawLocker('#39ff14', 7, true), label: 'Open locker', desc: 'Hanging inside: a jacket two sizes too small. Not yours.' },
     { id: 'prop-desk-1', x: 66, y: 76, node: () => drawSciDesk('#39ff14', 7), label: 'Lab desk', desc: 'A lab desk, dust rings where equipment used to sit.' },

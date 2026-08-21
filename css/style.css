@@ -222,7 +222,6 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   grid-column: calc(var(--pos, 0) + 1);
   justify-self: center;
   align-self: end;
-  image-rendering: pixelated;
   animation: playerBob 1.6s ease-in-out infinite;
   filter: drop-shadow(0 0 3px var(--accent));
 }
@@ -386,7 +385,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .title-tagline { font-size: 1.1rem; color: var(--fg-dim); letter-spacing: 0.05em; }
 .restored-tag { color: #ffe9a8; }
 
-.sprite { image-rendering: pixelated; display: block; margin: 0 auto; }
+.sprite { display: block; margin: 0 auto; }
 .title-ghost { animation: floatY 3.4s ease-in-out infinite; }
 @keyframes floatY {
   0%, 100% { transform: translateY(0); }
@@ -525,7 +524,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 
 /* non-interactive set-dressing dropped into a room-scene for atmosphere */
 .room-decor { display: flex; align-items: center; opacity: 0.85; }
-.room-decor canvas { image-rendering: pixelated; filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.12)); }
+.room-decor canvas { filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.12)); }
 
 .room-item--active { border-color: var(--accent, #39ff14); background: rgba(255, 255, 255, 0.05); }
 
@@ -559,9 +558,17 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .terminal-popup-files { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
 
 /* ---- roomKit.js: the free-roam room canvas shared by Sectors 0-3 ----
-   Overrides the older flex-wrap .room-scene layout with a full-size,
-   position:relative canvas so decor/hotspots/the player can be placed at
-   percentage coordinates, like a real scene rather than a row of icons. */
+   A genuine 3D corner: a side wall (perpendicular to the camera, receding
+   into depth), a back wall (facing the camera, at the far end of that
+   depth), and a floor (horizontal, tilted away underfoot) all built as real
+   `transform-style:preserve-3d` planes under one `perspective` — not a flat
+   image faking a corner. Each plane is a CSS 3D face; roomKit.js sorts
+   every decor/hotspot item into one of the three (by ROOM_HORIZON/
+   ROOM_CORNER, still 62%/16%) and positions it with plain left/top percent
+   *inside that plane's own local box*, so the existing perspective
+   transform on the plane does all the foreshortening work for free —
+   including on repeating-gradient textures, which now converge toward the
+   horizon exactly like a real photographed room instead of a painted trick. */
 .room-scene--free {
   position: relative;
   width: 100%;
@@ -570,57 +577,127 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   overflow: hidden;
   display: block;
   cursor: pointer;
-  /* A stylized 2D "corner room" instead of an empty void or a single flat
-     wall: a left wall and a back wall (the left one noticeably darker, as
-     if turned away from the light, so the two surfaces actually read as
-     different planes meeting at a corner) sit above a floor, with an
-     accent-tinted seam running down the corner and along the horizon.
-     Keep ROOM_HORIZON/ROOM_CORNER in roomKit.js in sync with the 62%/16%
-     split used here — scene files position wall-mounted vs. freestanding
-     objects against those same constants. */
-  background-color: #05070a;
-  background-image:
-    /* corner seam: the vertical line where the two walls meet */
-    linear-gradient(to right,
-      transparent, color-mix(in srgb, var(--accent, #39ff14) 55%, #000) 45%,
-      color-mix(in srgb, var(--accent, #39ff14) 55%, #000) 55%, transparent),
-    /* horizon seam: the line where the walls meet the floor */
-    linear-gradient(to bottom,
-      transparent 0, transparent calc(62% - 3px),
-      color-mix(in srgb, var(--accent, #39ff14) 75%, #000) calc(62% - 3px),
-      color-mix(in srgb, var(--accent, #39ff14) 75%, #000) calc(62% + 3px),
-      transparent calc(62% + 3px), transparent 100%),
-    /* left wall: darker, narrower panels — the surface turned away */
-    repeating-linear-gradient(90deg, #10161c 0 46px, #0a0e12 46px 48px),
-    /* back wall: lighter, wider panels — the surface facing the room */
-    repeating-linear-gradient(90deg, #1b242d 0 92px, #131a21 92px 96px),
-    /* floor: diagonal tile */
-    repeating-linear-gradient(115deg, #0a0f12 0 42px, #050809 42px 46px),
-    /* ambient shading: a ceiling-side darken, a floor-side darken */
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent 45%),
-    linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.65) 100%),
-    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--accent, #39ff14) 16%, transparent), transparent 65%);
-  background-size:
-    6px 62%, 100% 100%,
-    16% 62%, 84% 62%,
-    100% 38%,
-    100% 62%, 100% 38%,
-    100% 100%;
-  background-position:
-    calc(16% - 3px) top, top,
-    left top, right top,
-    left bottom,
-    left top, left bottom,
-    top;
-  background-repeat: no-repeat;
+  container-type: size;
+  background: radial-gradient(ellipse at 50% 6%, color-mix(in srgb, var(--accent, #39ff14) 10%, #0c1116), #05070a 72%);
+  perspective: 78cqmin;
+  perspective-origin: 50% 30%;
 }
-.room-decor-layer, .room-hotspot-layer { position: absolute; inset: 0; }
-.room-decor-layer { pointer-events: none; }
-.room-decor-layer canvas { position: absolute; transform: translate(-50%, -50%); image-rendering: pixelated; opacity: 0.8; }
+
+/* Shared 3D stage: every face below is a preserve-3d child of this, so
+   their individual rotate/translateZ transforms compose against one
+   consistent camera instead of each other. */
+.room-3d { position: absolute; inset: 0; transform-style: preserve-3d; }
+
+.room-face {
+  position: absolute;
+  transform-style: preserve-3d;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 0 8cqmin rgba(0, 0, 0, 0.4);
+}
+/* Items live in a plain (non-rotated-again) layer pinned to their face, at
+   plain left/top percentages — the face's own transform does the 3D work,
+   so roomKit.js never has to think in matrices, only in "which plane". Wall
+   faces only: the floor renders its items in a flat 2D overlay instead (see
+   .room-floor-sprites below) — canvases nested two rotateX() deep under a
+   shared perspective don't reliably paint in every engine, so the floor's
+   sprites are positioned by roomKit.js's own projectFloor() math instead of
+   living inside the rotated plane. */
+.room-layer { position: absolute; inset: 0; transform-style: preserve-3d; }
+
+/* Back wall: faces the camera dead-on, pushed to the far end of the room's
+   depth. Panel seams read as verticals with a top-down AO gradient, like
+   real wall panelling under an overhead light. */
+.room-wall-back {
+  left: 0; top: 0;
+  width: 100cqw; height: 62cqh;
+  transform: translateZ(-95cqmin);
+  background-image:
+    repeating-linear-gradient(90deg,
+      color-mix(in srgb, var(--accent, #39ff14) 3%, #1b242d) 0 11cqmin,
+      color-mix(in srgb, #000 22%, #1b242d) 11cqmin 11.3cqmin),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, transparent 16%, transparent 78%, rgba(0, 0, 0, 0.5) 100%),
+    linear-gradient(105deg, rgba(255, 255, 255, 0.05), transparent 40%);
+  background-size: 100% 100%, 100% 100%, 100% 100%;
+}
+
+/* Side wall: perpendicular to the camera, hinged at the room's left edge
+   and rotated back into depth — genuinely foreshortened by the shared
+   perspective, darker than the back wall since it catches only glancing
+   light (the classic "two walls of a corner read as different surfaces"
+   cue, now physically true instead of two different flat tints). */
+.room-wall-side {
+  left: 0; top: 0;
+  width: 95cqmin; height: 62cqh;
+  transform-origin: left center;
+  transform: rotateY(90deg);
+  background-image:
+    repeating-linear-gradient(90deg,
+      #10161c 0 8cqmin,
+      #0a0e12 8cqmin 8.3cqmin),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.65) 0%, transparent 18%, transparent 80%, rgba(0, 0, 0, 0.55) 100%),
+    linear-gradient(to right, rgba(0, 0, 0, 0.55), transparent 35%);
+  background-size: 100% 100%, 100% 100%, 100% 100%;
+}
+
+/* Floor: hinged along the horizon line and tilted flat underfoot. Diagonal
+   tile seams recede toward the back corner under real perspective, with a
+   contact-shadow gradient hugging both wall bases. */
+.room-floor {
+  left: 0; top: 62cqh;
+  width: 100cqw; height: 95cqmin;
+  transform-origin: top center;
+  transform: rotateX(90deg);
+  background-image:
+    repeating-linear-gradient(45deg, #0a0f12 0 5.5cqmin, #060a0c 5.5cqmin 5.7cqmin),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.12) 0 5.5cqmin, transparent 5.5cqmin 5.7cqmin),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, transparent 14%),
+    linear-gradient(to right, rgba(0, 0, 0, 0.4) 0%, transparent 10%);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+}
+
+/* Corner + horizon seams: thin accent-tinted lines dropped onto the wall
+   faces right at their shared edges, so the corner and the floor line read
+   clearly even though they're now real geometry, not a painted seam. */
+.room-wall-back::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--accent, #39ff14) 45%, transparent),
+              inset 0 -2px 0 0 color-mix(in srgb, var(--accent, #39ff14) 35%, transparent);
+}
+.room-wall-side::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 -2px 0 0 color-mix(in srgb, var(--accent, #39ff14) 30%, transparent);
+}
+
+.room-decor-item { position: absolute; pointer-events: none; }
+.room-decor-item canvas { opacity: 0.85; }
+/* Wall-mounted decor sits flush against its (rotated) plane, center-anchored
+   — it recedes with the wall, exactly like a real fixture bolted to it. */
+.room-decor-item--wall { transform: translate(-50%, -50%); }
+.room-decor-item--wall canvas { filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.1)); }
+
+/* Flat 2D overlay for everything standing on the floor (decor, hotspots,
+   the player, the speech bubble) — see the .room-layer comment above for
+   why this isn't nested inside the rotated .room-floor plane. roomKit.js's
+   projectFloor() computes each item's left/top % *and* a --depth-scale
+   custom property from its floor depth, so nearer things render larger,
+   matching the perspective the background floor texture implies, without
+   any of them actually living inside a 3D transform. */
+/* pointer-events:none so the (invisible, room-filling) container never
+   shadows wall hotspots sitting "behind" it in the real 3D stage; hotspot
+   buttons opt back into auto below so they stay clickable. */
+.room-floor-sprites { position: absolute; inset: 0; pointer-events: none; }
+.room-floor-sprites .room-hotspot,
+.room-floor-sprites .room-bubble { pointer-events: auto; }
+.room-floor-sprites .room-decor-item,
+.room-floor-sprites .room-hotspot,
+.room-player {
+  transform: translate(-50%, -100%) scale(var(--depth-scale, 1));
+  transform-origin: 50% 100%;
+}
+.room-floor-sprites .room-decor-item canvas { filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.5)); }
 
 .room-hotspot {
   position: absolute;
-  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -634,21 +711,23 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   background: rgba(5, 7, 10, 0.25);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.room-hotspot canvas { image-rendering: pixelated; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent, #39ff14) 30%, transparent)); }
+/* Wall hotspots sit flush against their (rotated) plane, center-anchored —
+   floor hotspots use the depth-scale transform defined above instead. */
+.room-hotspot--wall { transform: translate(-50%, -50%); }
+.room-hotspot canvas { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent, #39ff14) 30%, transparent)); }
 .room-hotspot:hover, .room-hotspot:focus-visible { border-color: var(--accent, #39ff14); background: color-mix(in srgb, var(--accent, #39ff14) 10%, transparent); }
 .room-hotspot--active { border-color: var(--accent, #39ff14); }
 
 .room-player {
   position: absolute;
-  transform: translate(-50%, -100%);
-  transition: left 0.5s linear, top 0.5s linear;
+  transition: left 0.5s linear, top 0.5s linear, transform 0.5s linear;
   z-index: 5;
   /* Purely a visual marker — never eat clicks meant for a hotspot it's
      standing next to or in front of (e.g. the keycard inside an open box
      right where the player just walked to). */
   pointer-events: none;
 }
-.room-player canvas { image-rendering: pixelated; filter: drop-shadow(0 0 5px var(--accent, #39ff14)); animation: playerBob 2.2s ease-in-out infinite; }
+.room-player canvas { filter: drop-shadow(0 0 5px var(--accent, #39ff14)); animation: playerBob 2.2s ease-in-out infinite; }
 .room-player--walking canvas { animation: none; }
 .room-player--jump { transition: none; }
 .room-player--flip canvas { transform: scaleX(-1); }
@@ -738,7 +817,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   padding: 0.5rem 0.3rem;
   background: var(--bg-panel-2);
 }
-.inventory-item canvas { image-rendering: pixelated; }
+.inventory-item canvas { }
 .inventory-item:hover, .inventory-item:focus-visible { border-color: var(--accent, #39ff14); color: var(--accent, #39ff14); }
 .inventory-empty { color: var(--fg-dim); text-align: center; font-style: italic; }
 
@@ -775,7 +854,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   background: repeating-linear-gradient(135deg, #0a0e12 0 12px, #0c1310 12px 24px);
 }
 .room-item { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; font-family: var(--font-display); font-size: 0.5rem; color: var(--fg-dim); }
-.room-item canvas { image-rendering: pixelated; filter: drop-shadow(0 0 6px rgba(57, 255, 20, 0.25)); }
+.room-item canvas { filter: drop-shadow(0 0 6px rgba(57, 255, 20, 0.25)); }
 .room-item--acquired { color: var(--accent); }
 .room-item--acquired canvas { filter: drop-shadow(0 0 10px rgba(57, 255, 20, 0.7)); }
 
@@ -1092,7 +1171,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
    ======================================================================== */
 
 .vault-badge { display: flex; align-items: center; gap: 0.6rem; font-family: var(--font-display); font-size: 0.6rem; color: #ff8a8a; }
-.vault-badge canvas { image-rendering: pixelated; filter: drop-shadow(0 0 6px rgba(255, 138, 138, 0.5)); }
+.vault-badge canvas { filter: drop-shadow(0 0 6px rgba(255, 138, 138, 0.5)); }
 .vault-badge--open { color: #00ff9c; }
 .vault-badge--open canvas { filter: drop-shadow(0 0 10px rgba(0, 255, 156, 0.8)); }
 .vault-hud { display: flex; justify-content: space-between; font-size: 1.2rem; color: var(--fg-dim); }

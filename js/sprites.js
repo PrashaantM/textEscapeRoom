@@ -7,35 +7,84 @@
 
 const BG = '#0a0e12';
 
+// Every sprite is still hand-built from flat-color rectangles (no image
+// assets), but two things now do the work that used to make them read as
+// crude, unrecognizable blocks: SUPERSAMPLE renders each canvas at several
+// times its displayed size (so edges and gradients stay crisp instead of
+// jagged when a sprite is later scaled up by roomKit.js's depth-based
+// perspective), and every rectangle painted through grid()'s `b()` helper
+// below automatically gets a lit top/left edge and a shadowed bottom/right
+// edge — a cheap per-shape bevel that turns flat silhouettes into things
+// that read as solid, dimensional objects rather than paper cutouts.
+const SUPERSAMPLE = 3;
+
+// Lightens (positive `percent`) or darkens (negative) a '#rrggbb' color for
+// the bevel edges below. Non-hex input (shouldn't happen — every sprite
+// color here is a literal hex string) passes through unchanged.
+function shade(color, percent) {
+  const m = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!m) return color;
+  const num = parseInt(m[1], 16);
+  const amt = Math.round(2.55 * percent);
+  const clamp = (v) => Math.max(0, Math.min(255, v));
+  const r = clamp(((num >> 16) & 0xff) + amt);
+  const g = clamp(((num >> 8) & 0xff) + amt);
+  const b = clamp((num & 0xff) + amt);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 // Returns a `b(gx, gy, gw, gh, color)` helper bound to a canvas context,
 // letting each draw* function below paint pixel-grid rectangles by grid
 // coordinates instead of raw pixels. Called once per drawing function.
+// `unit` here is already the supersampled per-grid-cell pixel size (see
+// makeCanvas() below), so every shape's bevel scales with it automatically.
 function grid(ctx, unit) {
   return (gx, gy, gw, gh, color) => {
+    const x = Math.round(gx * unit);
+    const y = Math.round(gy * unit);
+    const w = Math.round(gw * unit);
+    const h = Math.round(gh * unit);
     ctx.fillStyle = color;
-    ctx.fillRect(Math.round(gx * unit), Math.round(gy * unit), Math.round(gw * unit), Math.round(gh * unit));
+    ctx.fillRect(x, y, w, h);
+    if (w >= unit * 0.6 && h >= unit * 0.6) {
+      const bevel = Math.max(1, Math.round(unit * 0.14));
+      ctx.fillStyle = shade(color, 24);
+      ctx.fillRect(x, y, w, bevel);
+      ctx.fillRect(x, y, bevel, h);
+      ctx.fillStyle = shade(color, -28);
+      ctx.fillRect(x, y + h - bevel, w, bevel);
+      ctx.fillRect(x + w - bevel, y, bevel, h);
+    }
   };
 }
 
-// Creates a sized <canvas> with a 2d context ready for pixel-art drawing
-// (smoothing disabled). Called by every draw* function to set up its canvas
-// before painting sprite pixels onto it.
+// Creates a sized <canvas> with a 2d context ready for pixel-art drawing.
+// The canvas's backing resolution is SUPERSAMPLE times its displayed CSS
+// size (set explicitly so the two don't drift apart) with smoothing
+// enabled, so gradients and bevels stay clean at any scale instead of
+// looking like jagged, blocky pixel-art — retro in palette and silhouette,
+// not in rasterization. Called by every draw* function to set up its
+// canvas before painting sprite pixels onto it; returns the *effective*
+// per-grid-cell unit (already multiplied by SUPERSAMPLE) for grid() above.
 function makeCanvas(cols, rows, unit, className) {
   const canvas = document.createElement('canvas');
-  canvas.width = cols * unit;
-  canvas.height = rows * unit;
+  canvas.width = cols * unit * SUPERSAMPLE;
+  canvas.height = rows * unit * SUPERSAMPLE;
+  canvas.style.width = `${cols * unit}px`;
+  canvas.style.height = `${rows * unit}px`;
   canvas.className = className || '';
   canvas.setAttribute('aria-hidden', 'true');
   const ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = false;
-  return { canvas, ctx };
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  return { canvas, ctx, unit: unit * SUPERSAMPLE };
 }
 
 // Draws the small ghost sprite used as ECHO's avatar. Called by title.js and
 // ending.js.
 export function drawGhost(color = '#7cf9d0', unit = 8, className = 'sprite sprite-ghost') {
-  const { canvas, ctx } = makeCanvas(16, 16, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(16, 16, unit, className);
+  const b = grid(ctx, gridUnit);
   b(6, 2, 4, 1, color);
   b(4, 3, 8, 1, color);
   b(3, 4, 10, 1, color);
@@ -52,8 +101,8 @@ export function drawGhost(color = '#7cf9d0', unit = 8, className = 'sprite sprit
 // Draws the floppy disk sprite shown on the title screen. Called by
 // title.js.
 export function drawFloppy(accent = '#4cd6ff', unit = 8, className = 'sprite sprite-floppy') {
-  const { canvas, ctx } = makeCanvas(16, 16, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(16, 16, unit, className);
+  const b = grid(ctx, gridUnit);
   const body = '#8892a6';
   const metal = '#c9d3e0';
   const label = '#eef3f8';
@@ -70,8 +119,8 @@ export function drawFloppy(accent = '#4cd6ff', unit = 8, className = 'sprite spr
 // Draws the memory-shard collectible sprite. Called by scenes/shared.js's
 // showInterstitial (awarded per level) and level5.js's shard case display.
 export function drawShard(color = '#b967ff', unit = 8, className = 'sprite sprite-shard') {
-  const { canvas, ctx } = makeCanvas(10, 9, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 9, unit, className);
+  const b = grid(ctx, gridUnit);
   b(4, 0, 2, 1, color);
   b(3, 1, 4, 1, color);
   b(2, 2, 6, 1, color);
@@ -90,8 +139,8 @@ export function drawShard(color = '#b967ff', unit = 8, className = 'sprite sprit
 // Draws the keycard item sprite. Called by level1.js once the drawer is
 // opened and the keycard is picked up.
 export function drawKeycard(accent = '#39ff14', unit = 8, className = 'sprite sprite-keycard') {
-  const { canvas, ctx } = makeCanvas(14, 9, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(14, 9, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 14, 9, '#1c2733');
   b(0, 0, 14, 1, '#33475c');
   b(1, 2, 12, 2, BG);
@@ -103,24 +152,59 @@ export function drawKeycard(accent = '#39ff14', unit = 8, className = 'sprite sp
 // Called by level1.js, level3.js, and level4.js for their respective exit
 // doors and vault.
 export function drawDoor(locked = true, unit = 8, className = 'sprite sprite-door') {
-  const { canvas, ctx } = makeCanvas(12, 14, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(12, 14, unit, className);
+  const b = grid(ctx, gridUnit);
   const frame = '#3a4750';
   const panel = locked ? '#241a1a' : '#16241c';
+  const panelLit = locked ? '#2c201f' : '#1c2e22';
   const glow = locked ? '#ff4d5e' : '#39ff14';
+  const rivet = shade(frame, -35);
+
   b(0, 0, 12, 14, frame);
-  b(1, 1, 10, 12, panel);
-  b(6, 1, 1, 12, frame); // seam down the middle
-  b(8, 6, 2, 3, '#0a0e12'); // keypad housing
-  b(8, 7, 1, 1, glow); // status light
+  // Two recessed panels (a real door slab, not one flat rectangle) with a
+  // faint diagonal sheen so the metal reads as lit from one side.
+  b(1, 1, 4.6, 5.4, panel);
+  b(6.4, 1, 4.6, 5.4, panel);
+  b(1, 6.9, 4.6, 6.1, panel);
+  b(6.4, 6.9, 4.6, 6.1, panel);
+  const sheen = ctx.createLinearGradient(0, 0, gridUnit * 12, gridUnit * 14);
+  sheen.addColorStop(0, 'rgba(255, 255, 255, 0.06)');
+  sheen.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+  sheen.addColorStop(1, 'rgba(0, 0, 0, 0.1)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(gridUnit, gridUnit, gridUnit * 10, gridUnit * 12);
+  b(1.3, 1.3, 4, 0.3, panelLit); // top highlight on each panel
+  b(6.7, 1.3, 4, 0.3, panelLit);
+  b(6, 1, 0.7, 12, frame); // seam down the middle
+
+  // Corner rivets, so the frame reads as bolted plate rather than a flat tint.
+  [[0.4, 0.4], [11.6, 0.4], [0.4, 13.6], [11.6, 13.6]].forEach(([rx, ry]) => {
+    ctx.fillStyle = rivet;
+    ctx.beginPath();
+    ctx.arc(rx * gridUnit, ry * gridUnit, gridUnit * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Keypad housing with its own small glowing status light, radial-lit so
+  // it reads as an actual lens rather than a flat colored square.
+  b(8, 6, 2.2, 3.2, '#0a0e12');
+  b(8.1, 6.1, 2, 0.3, '#232b31');
+  const lightGrad = ctx.createRadialGradient(9.1 * gridUnit, 7.1 * gridUnit, 0, 9.1 * gridUnit, 7.1 * gridUnit, gridUnit * 0.9);
+  lightGrad.addColorStop(0, shade(glow, 45));
+  lightGrad.addColorStop(1, glow);
+  ctx.fillStyle = lightGrad;
+  ctx.beginPath();
+  ctx.arc(9.1 * gridUnit, 7.1 * gridUnit, gridUnit * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+
   return canvas;
 }
 
 // Draws the desk drawer sprite, shut or open (revealing the keycard).
 // Called by level1.js.
 export function drawDrawer(open = false, unit = 8, className = 'sprite sprite-drawer') {
-  const { canvas, ctx } = makeCanvas(14, 10, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(14, 10, unit, className);
+  const b = grid(ctx, gridUnit);
   const wood = '#5a4632';
   const woodDark = '#3d2f20';
   b(0, 0, 14, 4, wood);
@@ -136,8 +220,8 @@ export function drawDrawer(open = false, unit = 8, className = 'sprite sprite-dr
 
 // Draws the room terminal sprite. Called by level1.js's room diorama.
 export function drawTerminal(unit = 8, className = 'sprite sprite-terminal') {
-  const { canvas, ctx } = makeCanvas(12, 10, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(12, 10, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 12, 9, '#20303d');
   b(1, 1, 10, 6, '#0a0e12');
   b(2, 2, 6, 1, '#39ff14');
@@ -153,31 +237,72 @@ export function drawTerminal(unit = 8, className = 'sprite sprite-terminal') {
 // 2-frame walk cycle when it swaps the sprite each footstep tick, instead of
 // a single static pose sliding across the room.
 export function drawPlayer(accent = '#39ff14', unit = 8, className = 'sprite sprite-player', legPhase = 0) {
-  const { canvas, ctx } = makeCanvas(10, 16, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 16, unit, className);
+  const b = grid(ctx, gridUnit);
   const suit = '#2b3a45';
   const suitDark = '#1c262e';
   const skin = '#e8c9a0';
   const boot = '#0a0e12';
-  b(3, 0, 4, 3, skin);
-  b(3, 1, 4, 1, accent); // visor band, tinted per sector
-  b(2, 3, 6, 6, suit);
-  b(2, 3, 6, 1, suitDark);
-  b(4, 5, 2, 2, accent); // chest light
-  b(1, 4, 1, 4, suit);
-  b(8, 4, 1, 4, suit);
+
+  // Legs and boots first (drawn behind the torso's hem).
   const lead = legPhase ? 1 : 0;
   b(3 - lead * 0.5, 9, 2, 5, suitDark);
   b(5 + lead * 0.5, 9, 2, 5, suitDark);
-  b(2 - lead, 14, 3, 2, boot);
-  b(5 + lead, 14, 3, 2, boot);
+  b(2 - lead, 13.5, 3, 2.2, boot);
+  b(5 + lead, 13.5, 3, 2.2, boot);
+
+  // Torso: a tapered suit (wider shoulders, narrower waist) built from a
+  // few overlapping bevels rather than one flat block, plus a chest light.
+  b(1.6, 4.6, 6.8, 1.6, suit); // shoulder span
+  b(2.1, 6, 5.8, 3.6, suit); // torso taper
+  b(2.1, 6, 5.8, 0.8, suitDark); // collar shadow
+  b(4, 6.6, 2, 2, accent); // chest light
+  b(1.2, 5, 1.1, 4, suit); // left arm
+  b(7.7, 5, 1.1, 4, suit); // right arm
+  b(1.1, 8.6, 1.3, 1, suitDark); // left glove
+  b(7.6, 8.6, 1.3, 1, suitDark); // right glove
+
+  // Helmet: a real smooth dome (radial gradient, not stacked rects) so the
+  // player reads as a face from across the room instead of a stack of
+  // squares — the one place a curve earns its cost over the grid helper.
+  const headCx = 5 * gridUnit;
+  const headCy = 2.65 * gridUnit;
+  const headR = 2.5 * gridUnit;
+  const headGrad = ctx.createRadialGradient(
+    headCx - headR * 0.35, headCy - headR * 0.45, headR * 0.15,
+    headCx, headCy, headR * 1.05,
+  );
+  headGrad.addColorStop(0, shade(skin, 20));
+  headGrad.addColorStop(0.7, skin);
+  headGrad.addColorStop(1, shade(skin, -18));
+  ctx.fillStyle = headGrad;
+  ctx.beginPath();
+  ctx.ellipse(headCx, headCy, headR, headR * 1.08, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Visor: a horizontal gradient band across the lower half of the dome,
+  // tinted with the sector's accent so it still reads as "this sector's
+  // player" at a glance, same as the old flat visor stripe did.
+  const visorGrad = ctx.createLinearGradient(headCx - headR, headCy, headCx + headR, headCy);
+  visorGrad.addColorStop(0, shade(accent, -18));
+  visorGrad.addColorStop(0.5, shade(accent, 40));
+  visorGrad.addColorStop(1, shade(accent, -18));
+  ctx.fillStyle = visorGrad;
+  ctx.beginPath();
+  ctx.ellipse(headCx, headCy + headR * 0.12, headR * 0.82, headR * 0.34, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.beginPath();
+  ctx.ellipse(headCx - headR * 0.35, headCy - headR * 0.05, headR * 0.18, headR * 0.09, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
   return canvas;
 }
 
 // Draws the vault padlock sprite. Called by level4.js's vault status badge.
 export function drawPadlock(accent = '#00ff9c', unit = 8, className = 'sprite sprite-padlock') {
-  const { canvas, ctx } = makeCanvas(12, 12, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(12, 12, unit, className);
+  const b = grid(ctx, gridUnit);
   b(3, 0, 6, 1, accent);
   b(2, 1, 1, 3, accent);
   b(9, 1, 1, 3, accent);
@@ -192,8 +317,8 @@ export function drawPadlock(accent = '#00ff9c', unit = 8, className = 'sprite sp
 // actions too. Called by level1.js's playActionIcon().
 
 export function drawMagnifier(accent = '#39ff14', unit = 8, className = 'sprite sprite-icon') {
-  const { canvas, ctx } = makeCanvas(9, 9, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(9, 9, unit, className);
+  const b = grid(ctx, gridUnit);
   b(1, 1, 5, 1, accent);
   b(0, 2, 1, 3, accent);
   b(6, 2, 1, 3, accent);
@@ -204,8 +329,8 @@ export function drawMagnifier(accent = '#39ff14', unit = 8, className = 'sprite 
 }
 
 export function drawBackpack(accent = '#39ff14', unit = 8, className = 'sprite sprite-icon') {
-  const { canvas, ctx } = makeCanvas(9, 9, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(9, 9, unit, className);
+  const b = grid(ctx, gridUnit);
   b(2, 0, 5, 1, accent);
   b(1, 1, 7, 7, '#20303d');
   b(1, 1, 7, 1, accent);
@@ -215,8 +340,8 @@ export function drawBackpack(accent = '#39ff14', unit = 8, className = 'sprite s
 }
 
 export function drawLightbulb(accent = '#ffd166', unit = 8, className = 'sprite sprite-icon') {
-  const { canvas, ctx } = makeCanvas(9, 9, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(9, 9, unit, className);
+  const b = grid(ctx, gridUnit);
   b(3, 0, 3, 1, accent);
   b(2, 1, 5, 4, accent);
   b(3, 5, 3, 1, '#20303d');
@@ -235,8 +360,8 @@ export function drawLightbulb(accent = '#ffd166', unit = 8, className = 'sprite 
 // A wall-mounted clue tag: used both as generic shelf/rack decor and (in
 // level4.js) as the "unrevealed" state of a vault clue-card hotspot.
 export function drawClueTag(accent = '#39ff14', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(10, 8, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 8, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 10, 8, '#161f1a');
   b(0, 0, 10, 1, accent);
   b(1, 2, 6, 1, '#3a4750');
@@ -247,8 +372,8 @@ export function drawClueTag(accent = '#39ff14', unit = 8, className = 'sprite sp
 
 // A small wall shelf/monitor rack. Sector 0 decor.
 export function drawShelf(accent = '#39ff14', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(14, 6, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(14, 6, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 4, 14, 2, '#3d2f20');
   b(1, 0, 4, 4, '#20303d');
   b(2, 1, 2, 1, accent);
@@ -259,8 +384,8 @@ export function drawShelf(accent = '#39ff14', unit = 8, className = 'sprite spri
 
 // Arcade cabinet prop. Sector 1 decor.
 export function drawArcadeCabinet(accent = '#ff2fd0', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(10, 16, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 16, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 10, 16, '#2a1a33');
   b(1, 1, 8, 5, '#0a0e12');
   b(2, 2, 6, 3, accent);
@@ -273,8 +398,8 @@ export function drawArcadeCabinet(accent = '#ff2fd0', unit = 8, className = 'spr
 
 // Wall conduit/pipe with warning stripe. Sector 2 decor.
 export function drawConduit(accent = '#ffb000', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(14, 6, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(14, 6, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 1, 14, 3, '#2a2210');
   b(0, 2, 14, 1, accent);
   for (let x = 0; x < 14; x += 4) b(x, 0, 2, 1, accent);
@@ -284,8 +409,8 @@ export function drawConduit(accent = '#ffb000', unit = 8, className = 'sprite sp
 
 // Security camera prop. Sector 3 decor.
 export function drawVaultCam(accent = '#00ff9c', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(10, 8, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 8, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 2, 7, 4, '#20303d');
   b(6, 3, 3, 2, '#0a0e12');
   b(8, 3, 2, 2, accent);
@@ -300,8 +425,8 @@ export function drawVaultCam(accent = '#00ff9c', unit = 8, className = 'sprite s
 // A storage box/crate, shut or lid-open (revealing whatever is inside via
 // `contents`, drawn by the caller on top). Sector 0's keycard container.
 export function drawBox(open = false, unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(12, 10, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(12, 10, unit, className);
+  const b = grid(ctx, gridUnit);
   const card = '#8a6a3a';
   const cardDark = '#5e4626';
   if (open) {
@@ -320,8 +445,8 @@ export function drawBox(open = false, unit = 8, className = 'sprite sprite-decor
 // Tall metal cabinet/locker bank. `doors` (2 or 3) varies its width slightly.
 export function drawCabinet(accent = '#39ff14', unit = 8, className = 'sprite sprite-decor', doors = 2) {
   const w = doors * 5;
-  const { canvas, ctx } = makeCanvas(w, 18, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(w, 18, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, w, 18, '#2a333a');
   for (let i = 0; i < doors; i++) {
     const x = i * 5;
@@ -333,8 +458,8 @@ export function drawCabinet(accent = '#39ff14', unit = 8, className = 'sprite sp
 
 // A single tall locker, optionally hanging open (cracked, empty inside).
 export function drawLocker(accent = '#39ff14', unit = 8, className = 'sprite sprite-decor', open = false) {
-  const { canvas, ctx } = makeCanvas(6, 16, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(6, 16, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 6, 16, '#2a333a');
   if (open) {
     b(0.5, 1, 5, 14, '#05070a');
@@ -348,8 +473,8 @@ export function drawLocker(accent = '#39ff14', unit = 8, className = 'sprite spr
 
 // A sci-fi desk console: sloped panel with glowing readouts.
 export function drawSciDesk(accent = '#39ff14', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(16, 8, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(16, 8, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 5, 16, 3, '#20303d');
   b(1, 1, 14, 4, '#161f1a');
   b(2, 2, 4, 1, accent);
@@ -361,8 +486,8 @@ export function drawSciDesk(accent = '#39ff14', unit = 8, className = 'sprite sp
 
 // Lab flask/beaker cluster. Sector 0/Sector 3-lab decor.
 export function drawLabFlask(accent = '#39ff14', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(8, 9, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(8, 9, unit, className);
+  const b = grid(ctx, gridUnit);
   b(3, 0, 2, 3, '#3a4750');
   b(1, 3, 6, 5, '#1c2733');
   b(2, 4, 4, 3, accent);
@@ -375,8 +500,8 @@ export function drawLabFlask(accent = '#39ff14', unit = 8, className = 'sprite s
 
 // Ceiling/wall light fixture, tinted with the sector accent.
 export function drawWallLight(accent = '#ffd166', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(10, 4, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 4, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 10, 1, '#3a4750');
   b(1, 1, 8, 2, accent);
   ctx.globalAlpha = 0.4;
@@ -388,8 +513,8 @@ export function drawWallLight(accent = '#ffd166', unit = 8, className = 'sprite 
 // A small closet-room door (distinct from the main sector exit door), open
 // or shut. Sector 0's terminal alcove.
 export function drawClosetDoor(open = false, unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(10, 14, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 14, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 10, 14, '#3a4750');
   if (open) {
     b(1, 1, 8, 13, '#05070a');
@@ -402,8 +527,8 @@ export function drawClosetDoor(open = false, unit = 8, className = 'sprite sprit
 
 // A potted plant. Generic background dressing across sectors.
 export function drawPlantProp(unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(8, 10, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(8, 10, unit, className);
+  const b = grid(ctx, gridUnit);
   const pot = '#5a4632';
   const leaf = '#2f9e5b';
   b(2, 7, 4, 3, pot);
@@ -416,8 +541,8 @@ export function drawPlantProp(unit = 8, className = 'sprite sprite-decor') {
 
 // A stack of crates. Generic background dressing across sectors.
 export function drawCrateStack(accent = '#8a6a3a', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(10, 9, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 9, unit, className);
+  const b = grid(ctx, gridUnit);
   const dark = '#5e4626';
   b(0, 5, 5, 4, accent);
   b(0, 5, 5, 1, dark);
@@ -430,8 +555,8 @@ export function drawCrateStack(accent = '#8a6a3a', unit = 8, className = 'sprite
 
 // A bank of small wall monitors, all dark save a faint scanline glow.
 export function drawMonitorBank(accent = '#39ff14', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(14, 6, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(14, 6, unit, className);
+  const b = grid(ctx, gridUnit);
   for (let i = 0; i < 3; i++) {
     const x = i * 4.6;
     b(x, 0, 4, 6, '#20303d');
@@ -445,8 +570,8 @@ export function drawMonitorBank(accent = '#39ff14', unit = 8, className = 'sprit
 
 // A ceiling/floor vent grille.
 export function drawVentProp(unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(10, 6, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 6, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 10, 6, '#3a4750');
   for (let x = 1; x < 10; x += 2) b(x, 0.5, 1, 5, '#1c262e');
   return canvas;
@@ -458,8 +583,8 @@ export function drawVentProp(unit = 8, className = 'sprite sprite-decor') {
 // separate CSS-animated overlay (see .spark-wire in style.css) layered on
 // top by the caller, so this just draws the dangling cable.
 export function drawSparkWire(unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(10, 10, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 10, unit, className);
+  const b = grid(ctx, gridUnit);
   const wire = '#2a2220';
   const copper = '#c98a4a';
   b(4, 0, 2, 6, wire);
@@ -473,8 +598,8 @@ export function drawSparkWire(unit = 8, className = 'sprite sprite-decor') {
 // A cracked glass containment pod, tinted per room (amber/rust for the
 // tech bay's damaged pods, green/blue for the bio bay's tanks).
 export function drawGlassPod(accent = '#4cd6ff', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(10, 14, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 14, unit, className);
+  const b = grid(ctx, gridUnit);
   b(1, 0, 8, 13, '#20303d');
   ctx.globalAlpha = 0.35;
   b(2, 2, 6, 9, accent);
@@ -490,8 +615,8 @@ export function drawGlassPod(accent = '#4cd6ff', unit = 8, className = 'sprite s
 // A dead, damaged terminal — decorative only, distinct from the one
 // working terminal in the room (drawGoodTerminal below).
 export function drawBrokenTerminal(unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(12, 10, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(12, 10, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 12, 9, '#20303d');
   b(1, 1, 10, 6, '#05070a');
   b(2, 2, 5, 1, '#3a4750');
@@ -508,8 +633,8 @@ export function drawBrokenTerminal(unit = 8, className = 'sprite sprite-decor') 
 // steady glow plus 2 status dots once its minigame has been cleared,
 // mirroring drawArcadeCabinet's look.
 export function drawGoodTerminal(accent = '#ff2fd0', unit = 8, className = 'sprite sprite-decor', solved = false) {
-  const { canvas, ctx } = makeCanvas(14, 12, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(14, 12, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 14, 11, '#20303d');
   b(1, 1, 12, 7, solved ? accent : '#05070a');
   if (!solved) {
@@ -530,8 +655,8 @@ export function drawGoodTerminal(accent = '#ff2fd0', unit = 8, className = 'spri
 // A large aquarium tank — glass frame, tinted water, a rock pile, coral,
 // driftwood, and seaweed, but deliberately no creatures. Sector 2 decor.
 export function drawAquariumTank(accent = '#2f9e5b', unit = 10, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(18, 22, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(18, 22, unit, className);
+  const b = grid(ctx, gridUnit);
   const frame = '#3a4750';
   const water = accent;
   const rock = '#4a4438';
@@ -569,8 +694,8 @@ export function drawAquariumTank(accent = '#2f9e5b', unit = 10, className = 'spr
 // torn corner (about to fall out) — purely a color cue for us, the click
 // handler decides what actually happens.
 export function drawPoster(accent = '#00ff9c', unit = 6, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(8, 10, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(8, 10, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 8, 10, '#e8e2d0');
   ctx.globalAlpha = 0.5;
   b(1, 1, 6, 3, accent);
@@ -583,8 +708,8 @@ export function drawPoster(accent = '#00ff9c', unit = 6, className = 'sprite spr
 
 // A tall paper pile, leaning slightly.
 export function drawPaperPile(unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(10, 8, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(10, 8, unit, className);
+  const b = grid(ctx, gridUnit);
   const paper = '#c9c2a8';
   for (let i = 0; i < 5; i++) b(0.5 + (i % 2) * 0.3, 8 - i * 1.5, 8, 1.4, paper);
   return canvas;
@@ -592,8 +717,8 @@ export function drawPaperPile(unit = 8, className = 'sprite sprite-decor') {
 
 // A computer cubicle: desk + monitor + divider wall.
 export function drawComputerCubicle(accent = '#00ff9c', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(12, 10, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(12, 10, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 2, 10, '#3a4750');
   b(2, 6, 10, 4, '#5a4632');
   b(3, 1, 5, 4, '#20303d');
@@ -605,8 +730,8 @@ export function drawComputerCubicle(accent = '#00ff9c', unit = 8, className = 's
 // default, or showing a clue letter with everything else redacted) plus a
 // small desk beneath it.
 export function drawMonitorSection(unit = 8, className = 'sprite sprite-decor', state = 'static') {
-  const { canvas, ctx } = makeCanvas(12, 11, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(12, 11, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 12, 8, '#20303d');
   b(1, 1, 10, 6, state === 'clue' ? '#0a0e12' : '#1c262e');
   if (state === 'static') {
@@ -622,8 +747,8 @@ export function drawMonitorSection(unit = 8, className = 'sprite sprite-decor', 
 
 // A rolling office chair.
 export function drawChairProp(unit = 6, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(6, 8, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(6, 8, unit, className);
+  const b = grid(ctx, gridUnit);
   b(1, 0, 4, 3, '#2b3a45');
   b(1, 3, 4, 1, '#1c262e');
   b(2, 4, 2, 3, '#3a4750');
@@ -634,8 +759,8 @@ export function drawChairProp(unit = 6, className = 'sprite sprite-decor') {
 // The multiscreen wall in the security room: a grid of small screens
 // (`cells` of them), one of which can be flagged 'clue'.
 export function drawMultiscreen(unit = 6, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(20, 12, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(20, 12, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 20, 12, '#20303d');
   for (let r = 0; r < 2; r++) {
     for (let c = 0; c < 3; c++) {
@@ -647,8 +772,8 @@ export function drawMultiscreen(unit = 6, className = 'sprite sprite-decor') {
 
 // A control panel desk with dials/switches.
 export function drawControlPanel(accent = '#00ff9c', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(16, 7, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(16, 7, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 3, 16, 4, '#3a4750');
   b(1, 0, 14, 3, '#1c262e');
   for (let i = 0; i < 5; i++) b(1.5 + i * 2.8, 1, 1.2, 1.2, i % 2 ? accent : '#5a4632');
@@ -659,8 +784,8 @@ export function drawControlPanel(accent = '#00ff9c', unit = 8, className = 'spri
 // room's "8 large locker-like structures", also reused as file-room
 // closet dressing).
 export function drawLockerStuffed(accent = '#39ff14', unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(8, 16, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(8, 16, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 8, 16, '#2a333a');
   b(0.5, 1, 7, 14, '#1c262e');
   b(2, 10, 4, 4, '#5a4632');
@@ -670,8 +795,8 @@ export function drawLockerStuffed(accent = '#39ff14', unit = 8, className = 'spr
 
 // A wall electrical box, panel open, wires visible.
 export function drawElectricalBox(unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(8, 10, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(8, 10, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 8, 10, '#3a4750');
   b(1, 1, 6, 7, '#0a0e12');
   b(2, 2, 1, 5, '#c98a4a');
@@ -682,8 +807,8 @@ export function drawElectricalBox(unit = 8, className = 'sprite sprite-decor') {
 
 // A single crate, optionally cracked open (top split, contents peeking).
 export function drawCrateProp(cracked = false, unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(8, 8, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(8, 8, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 0, 8, 8, '#8a6a3a');
   b(0, 0, 8, 1, '#5e4626');
   b(0, 7, 8, 1, '#5e4626');
@@ -697,8 +822,8 @@ export function drawCrateProp(cracked = false, unit = 8, className = 'sprite spr
 
 // A long lab desk (row of desks with chairs implied on either side).
 export function drawLabDesk(unit = 8, className = 'sprite sprite-decor') {
-  const { canvas, ctx } = makeCanvas(24, 6, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(24, 6, unit, className);
+  const b = grid(ctx, gridUnit);
   b(0, 2, 24, 4, '#5a4632');
   b(0, 2, 24, 1, '#3d2f20');
   b(2, 0, 2, 2, '#1c2733');
@@ -711,16 +836,16 @@ export function drawLabDesk(unit = 8, className = 'sprite sprite-decor') {
 // down (splintered, lying flat) once the sector's second minigame clears.
 export function drawBarricade(destroyed = false, unit = 8, className = 'sprite sprite-decor') {
   if (destroyed) {
-    const { canvas, ctx } = makeCanvas(14, 4, unit, className);
-    const b = grid(ctx, unit);
+    const { canvas, ctx, unit: gridUnit } = makeCanvas(14, 4, unit, className);
+    const b = grid(ctx, gridUnit);
     b(0, 2, 6, 1, '#5e4626');
     b(7, 3, 5, 1, '#5e4626');
     b(2, 0, 4, 1, '#8a6a3a');
     b(9, 1, 4, 1, '#8a6a3a');
     return canvas;
   }
-  const { canvas, ctx } = makeCanvas(12, 12, unit, className);
-  const b = grid(ctx, unit);
+  const { canvas, ctx, unit: gridUnit } = makeCanvas(12, 12, unit, className);
+  const b = grid(ctx, gridUnit);
   const plank = '#8a6a3a';
   b(0, 1, 12, 2, plank);
   b(0, 6, 12, 2, plank);
