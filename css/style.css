@@ -899,11 +899,15 @@ html.mobile-scaled #viewport-scale {
   transform-origin: top left;
 }
 
+/* display:none by default (regardless of any `hidden` attribute) so a
+   plain ID rule can never override the browser's own hidden handling —
+   js/mobile.js opts an element into `.lp-show` only on a detected mobile
+   device, so desktop never sees this at all. */
 #landscape-prompt {
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -915,6 +919,7 @@ html.mobile-scaled #viewport-scale {
   opacity: 1;
   transition: opacity 0.4s ease;
 }
+#landscape-prompt.lp-show { display: flex; }
 #landscape-prompt.hide { opacity: 0; pointer-events: none; }
 #landscape-prompt .rotate-icon {
   width: 48px;

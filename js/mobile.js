@@ -27,14 +27,15 @@ function applyScale(outer, inner) {
 }
 
 // Shows the landscape-prompt overlay for a fixed 2 seconds (an intro
-// animation, not a gate on actual orientation) then fades it out. Called
-// once on init when running on a mobile device.
+// animation, not a gate on actual orientation) then fades it out and
+// removes it, leaving the game to resume normally underneath. Only ever
+// called on a detected mobile device — desktop never adds `.lp-show`, so
+// the element (display:none by default) never appears there at all.
 function runLandscapePrompt(prompt) {
-  prompt.hidden = false;
-  requestAnimationFrame(() => prompt.classList.remove('hide'));
+  prompt.classList.add('lp-show');
   setTimeout(() => {
     prompt.classList.add('hide');
-    setTimeout(() => { prompt.hidden = true; }, 450);
+    setTimeout(() => { prompt.classList.remove('lp-show', 'hide'); }, 450);
   }, PROMPT_MS);
 }
 
