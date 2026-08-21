@@ -21,7 +21,7 @@ const FOOTSTEP_MS = 150;
 // visual inventory overlay. `accent` tints the player sprite and bubble
 // border to match the sector's color.
 export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
-  const roomEl = el('div', { class: 'room-scene room-scene--free', role: 'group', 'aria-label': ariaLabel });
+  const roomEl = el('div', { class: 'room-scene room-scene--free', style: `--accent:${accent}`, role: 'group', 'aria-label': ariaLabel });
   const decorLayer = el('div', { class: 'room-decor-layer', 'aria-hidden': 'true' });
   const hotspotLayer = el('div', { class: 'room-hotspot-layer' });
   const playerWrap = el('div', { class: 'room-player', style: 'left:50%; top:60%' });
@@ -106,23 +106,17 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
     activeId = null;
   }
 
-  // Walks the player sprite to hotspot `id`'s position with a real 2-frame
-  // leg-cycle animation (a footstep tick alternates legPhase and redraws
-  // the sprite, in sync with sfx.walk()) instead of just sliding a static
-  // pose across the room. Resolves once the CSS transition ends. A no-op
-  // (resolves immediately) if already walking or already there.
-  function walkTo(id) {
+  // Shared walk animation: interpolates the player to (x, y) with the
+  // real 2-frame leg-cycle animation (a footstep tick alternates legPhase
+  // and redraws the sprite, in sync with sfx.walk()), resolving once the
+  // CSS transition ends. A no-op (resolves immediately) if already
+  // walking or already there. Used by both walkTo() (a named hotspot) and
+  // walkToPoint() (an arbitrary click on open floor).
+  function walkToXY(x, y) {
     return new Promise((resolve) => {
-      const spot = hotspots.get(id);
-      if (!spot || walking) { resolve(); return; }
-      hideBubble();
-      const prevActive = activeId;
-      activeId = id;
-      if (prevActive) hotspots.get(prevActive)?.btn.classList.remove('room-hotspot--active');
-      spot.btn.classList.add('room-hotspot--active');
-
-      const dx = spot.x - playerXY.x;
-      const dy = spot.y - playerXY.y;
+      if (walking) { resolve(); return; }
+      const dx = x - playerXY.x;
+      const dy = y - playerXY.y;
       if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) { resolve(); return; }
 
       walking = true;
@@ -134,7 +128,7 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
         sfx.walk();
       }, FOOTSTEP_MS);
 
-      playerXY = { x: spot.x, y: spot.y };
+      playerXY = { x, y };
       playerWrap.style.left = `${playerXY.x}%`;
       playerWrap.style.top = `${playerXY.y}%`;
 
@@ -152,6 +146,29 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
       // strips the CSS transition entirely).
       setTimeout(done, 900);
     });
+  }
+
+  // Walks the player sprite to hotspot `id`'s position and marks it the
+  // active hotspot (highlight ring, getActive()). Called by every sector's
+  // click handlers before acting on an object.
+  function walkTo(id) {
+    const spot = hotspots.get(id);
+    if (!spot) return Promise.resolve();
+    hideBubble();
+    const prevActive = activeId;
+    activeId = id;
+    if (prevActive) hotspots.get(prevActive)?.btn.classList.remove('room-hotspot--active');
+    spot.btn.classList.add('room-hotspot--active');
+    return walkToXY(spot.x, spot.y);
+  }
+
+  // Walks the player to an arbitrary point (percentage coordinates) with
+  // no hotspot involved — clicking open floor. Clears whatever hotspot
+  // was previously active, since the player is no longer standing at it.
+  function walkToPoint(x, y) {
+    hideBubble();
+    if (activeId) { hotspots.get(activeId)?.btn.classList.remove('room-hotspot--active'); activeId = null; }
+    return walkToXY(x, y);
   }
 
   // Shows a small speech-bubble of option buttons anchored just above the
@@ -177,7 +194,7 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
   function isWalking() { return walking; }
 
   return {
-    el: roomEl, setDecor, setHotspot, removeHotspot, clearHotspots, walkTo, placeAt, showBubble, hideBubble, getActive, isWalking,
+    el: roomEl, setDecor, setHotspot, removeHotspot, clearHotspots, walkTo, walkToPoint, placeAt, showBubble, hideBubble, getActive, isWalking,
   };
 }
 

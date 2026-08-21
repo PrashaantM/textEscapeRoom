@@ -21,12 +21,13 @@
 import { completeLevel, getState } from '../state.js';
 import { sfx } from '../audio.js';
 import { shake } from '../fx.js';
-import { el, delay } from '../utils.js';
+import { el, delay, clamp, randInt, sample } from '../utils.js';
 import { terminalFrame, typeInto, showInterstitial } from './shared.js';
 import {
   drawDoor, drawTerminal, drawKeycard, drawBox, drawCabinet, drawLocker, drawSciDesk,
   drawLabFlask, drawWallLight, drawClosetDoor, drawPlantProp, drawCrateStack, drawMonitorBank,
-  drawVentProp, drawShelf, drawClueTag,
+  drawVentProp, drawShelf, drawClueTag, drawFloppy, drawPaperPile, drawLightbulb, drawMagnifier,
+  drawBackpack, drawGhost,
 } from '../sprites.js';
 import { createRoom, buildInventoryOverlay } from './roomKit.js';
 
@@ -36,45 +37,82 @@ const HELP_ROWS = [
   ['Walk to the box', 'open it and take what is inside'],
   ['Walk to the terminal', 'read files, list hidden ones, find the access code'],
   ['Walk to the door', 'enter the 3-digit code, then scan your keycard'],
+  ['Click anything else', 'or open floor - walk over and take a look, some things are worth picking up'],
   ['Inventory', 'see and use what you are carrying'],
   ['Hint', 'nudge yourself in the right direction, from the terminal bubble'],
 ];
 
-// A fixed layout of background-only set dressing (cabinets, lockers,
-// desks, lab clutter, lights, the closet doorway, ...) scattered across the
-// room now that its visual half covers the full screen. Purely decorative;
-// never clickable. Percentage coordinates within the room box.
-function buildDecor() {
+// Set dressing that used to be purely decorative (cabinets, lockers, desks,
+// lab clutter, lights, ...) is now a table of walkable, clickable hotspots:
+// every one of them gets a short LOOK description, and one (the evidence
+// tag) is also a pickup, even though nothing here is required to clear the
+// sector. Percentage coordinates within the room box. Only the closet
+// doorway around the terminal stays pure decor (buildDecorOnly() below) —
+// it's just the terminal nook's framing, not its own object.
+function buildProps() {
   return [
-    { x: 8, y: 20, node: drawCabinet('#39ff14', 7, undefined, 2) },
-    { x: 25, y: 14, node: drawCabinet('#39ff14', 7, undefined, 3) },
-    { x: 40, y: 11, node: drawLocker('#39ff14', 7) },
-    { x: 46, y: 11, node: drawLocker('#39ff14', 7, true) },
-    { x: 60, y: 20, node: drawSciDesk('#39ff14', 7) },
-    { x: 15, y: 34, node: drawSciDesk('#39ff14', 6) },
-    { x: 62, y: 30, node: drawLabFlask('#39ff14', 7) },
-    { x: 30, y: 30, node: drawLabFlask('#39ff14', 6) },
-    { x: 20, y: 5, node: drawWallLight('#ffd166', 7) },
-    { x: 50, y: 5, node: drawWallLight('#ffd166', 7) },
-    { x: 80, y: 5, node: drawWallLight('#ffd166', 7) },
-    { x: 65, y: 5, node: drawWallLight('#ffd166', 6) },
-    { x: 5, y: 88, node: drawPlantProp(7) },
-    { x: 95, y: 88, node: drawPlantProp(7) },
-    { x: 55, y: 66, node: drawPlantProp(6) },
-    { x: 15, y: 92, node: drawCrateStack('#8a6a3a', 7) },
-    { x: 70, y: 90, node: drawCrateStack('#8a6a3a', 6) },
-    { x: 48, y: 92, node: drawCrateStack('#8a6a3a', 6) },
-    { x: 35, y: 8, node: drawMonitorBank('#39ff14', 7) },
-    { x: 70, y: 12, node: drawMonitorBank('#39ff14', 6) },
-    { x: 55, y: 95, node: drawVentProp(6) },
-    { x: 10, y: 48, node: drawVentProp(6) },
-    { x: 92, y: 62, node: drawCabinet('#39ff14', 6, undefined, 2) },
-    { x: 85, y: 78, node: drawLocker('#39ff14', 6) },
-    { x: 18, y: 62, node: drawShelf('#39ff14', 7) },
-    { x: 45, y: 38, node: drawClueTag('#39ff14', 6) },
-    { x: 78, y: 30, node: drawClosetDoor(true, 8) },
+    { id: 'prop-cabinet-1', x: 8, y: 20, node: () => drawCabinet('#39ff14', 7, undefined, 2), label: 'Supply cabinet', desc: 'A supply cabinet. Empty hangers rattle when you nudge it.' },
+    { id: 'prop-cabinet-2', x: 25, y: 14, node: () => drawCabinet('#39ff14', 7, undefined, 3), label: 'Bolted cabinet', desc: "Bolted shut. Someone stenciled 'DO NOT' on it; the rest flaked off." },
+    { id: 'prop-locker-1', x: 40, y: 11, node: () => drawLocker('#39ff14', 7), label: 'Dented locker', desc: 'A gym locker, dented like it lost a fight.' },
+    { id: 'prop-locker-2', x: 46, y: 11, node: () => drawLocker('#39ff14', 7, true), label: 'Open locker', desc: 'Hanging inside: a jacket two sizes too small. Not yours.' },
+    { id: 'prop-desk-1', x: 60, y: 20, node: () => drawSciDesk('#39ff14', 7), label: 'Lab desk', desc: 'A lab desk, dust rings where equipment used to sit.' },
+    { id: 'prop-desk-2', x: 15, y: 34, node: () => drawSciDesk('#39ff14', 6), label: 'Carved desk', desc: "Someone carved 'J.A. WAS HERE' into the wood." },
+    { id: 'prop-flask-1', x: 62, y: 30, node: () => drawLabFlask('#39ff14', 7), label: 'Cracked flask', desc: 'A cracked flask, long since dried out.' },
+    { id: 'prop-flask-2', x: 30, y: 30, node: () => drawLabFlask('#39ff14', 6), label: 'Empty flask', desc: 'Whatever was brewing in here evaporated years ago.' },
+    { id: 'prop-light-1', x: 20, y: 5, node: () => drawWallLight('#ffd166', 7), label: 'Wall light', desc: 'A wall light. Steady, at least - small mercies.' },
+    { id: 'prop-light-2', x: 50, y: 5, node: () => drawWallLight('#ffd166', 7), label: 'Wall light', desc: 'This one buzzes when you get close. Probably fine.' },
+    { id: 'prop-light-3', x: 80, y: 5, node: () => drawWallLight('#ffd166', 7), label: 'Wall light', desc: 'Flickers if you stare at it too long. You look away.' },
+    { id: 'prop-light-4', x: 65, y: 5, node: () => drawWallLight('#ffd166', 6), label: 'Wall light', desc: 'A wall light. Steady, at least - small mercies.' },
+    { id: 'prop-plant-1', x: 5, y: 88, node: () => drawPlantProp(7), label: 'Plastic plant', desc: 'A plastic plant, dust standing in for dew.' },
+    { id: 'prop-plant-2', x: 95, y: 88, node: () => drawPlantProp(7), label: 'Plastic plant', desc: 'Somehow greener than everything else in this room.' },
+    { id: 'prop-plant-3', x: 55, y: 66, node: () => drawPlantProp(6), label: 'Plastic plant', desc: 'Fake leaves, real dust. A lot of it.' },
+    { id: 'prop-crate-1', x: 15, y: 92, node: () => drawCrateStack('#8a6a3a', 7), label: 'Crate stack', desc: "Stenciled 'FRAGILE' in a language you don't recognize." },
+    { id: 'prop-crate-2', x: 70, y: 90, node: () => drawCrateStack('#8a6a3a', 6), label: 'Crate stack', desc: 'Nailed shut. Prying it open feels like a bad idea.' },
+    { id: 'prop-crate-3', x: 48, y: 92, node: () => drawCrateStack('#8a6a3a', 6), label: 'Crate stack', desc: 'Empty, by the sound of it when you knock.' },
+    { id: 'prop-monitor-1', x: 35, y: 8, node: () => drawMonitorBank('#39ff14', 7), label: 'Monitor bank', desc: 'A bank of dead monitors. One still shows a login screen, frozen mid-blink.' },
+    { id: 'prop-monitor-2', x: 70, y: 12, node: () => drawMonitorBank('#39ff14', 6), label: 'Monitor bank', desc: 'More dead screens. Your reflection is the only thing on them.' },
+    { id: 'prop-vent-1', x: 55, y: 95, node: () => drawVentProp(6), label: 'Vent grate', desc: 'A vent grate. Something ticks behind it, then stops.' },
+    { id: 'prop-vent-2', x: 10, y: 48, node: () => drawVentProp(6), label: 'Vent grate', desc: 'Warm air leaks out. Somewhere, something is still running.' },
+    { id: 'prop-cabinet-3', x: 92, y: 62, node: () => drawCabinet('#39ff14', 6, undefined, 2), label: 'Open cabinet', desc: "This one's unlocked, and empty. Somebody beat you to it." },
+    { id: 'prop-locker-3', x: 85, y: 78, node: () => drawLocker('#39ff14', 6), label: 'Named locker', desc: "Locked. A faded nameplate reads 'J. ALVAREZ.'" },
+    { id: 'prop-shelf', x: 18, y: 62, node: () => drawShelf('#39ff14', 7), label: 'Shelf of binders', desc: 'A shelf of ring binders, spines unlabeled. None of them budge.' },
+    {
+      id: 'prop-tag', x: 45, y: 38, node: () => drawClueTag('#39ff14', 6), label: 'Evidence tag',
+      desc: "A tag reading 'EVIDENCE - DO NOT REMOVE.' Someone removed it anyway.",
+      pickup: {
+        label: 'EVIDENCE TAG',
+        node: () => drawClueTag('#39ff14', 7),
+        lore: 'The tag reads: SECTOR 0, INCIDENT 004. Whatever happened here got filed and buried instead.',
+      },
+    },
   ];
 }
+
+// The one non-interactive prop left: the closet doorway framing the
+// terminal nook itself, not a separate object worth clicking on.
+function buildDecorOnly() {
+  return [{ x: 78, y: 30, node: drawClosetDoor(true, 8) }];
+}
+
+// Small filler items scattered inside the storage box alongside the
+// keycard and the photograph — pure flavor, never collected for a reason,
+// just something to find. openBoxPopup() samples 3-4 of these per box open.
+const BOX_FILLER_POOL = [
+  { label: 'OLD FLOPPY DISK', node: () => drawFloppy('#7f9c93', 6), flavor: 'Corrupted. Whatever was on it is gone now.' },
+  { label: 'WATER-STAINED PAPERS', node: () => drawPaperPile(6), flavor: 'The ink has run. You can just make out a shift schedule.' },
+  { label: 'BURNT-OUT BULB', node: () => drawLightbulb('#7f9c93', 6), flavor: 'Dead. Somebody swapped it and never threw it out.' },
+  { label: 'CRACKED MAGNIFIER', node: () => drawMagnifier('#7f9c93', 6), flavor: 'Half the lens is missing. Still better than nothing.' },
+  { label: 'EMPTY CANVAS BAG', node: () => drawBackpack('#7f9c93', 6), flavor: 'Somebody packed to leave in a hurry, then never did.' },
+];
+
+// The box's one other keeper besides the keycard: pure lore, never used
+// for anything, added to inventory anyway.
+const BOX_LORE_ITEM = {
+  label: 'FADED PHOTOGRAPH',
+  node: () => drawGhost('#c9b38a', 6),
+  invNode: () => drawGhost('#c9b38a', 7),
+  lore: 'A young technician grins at the camera in a lab coat two sizes too big. On the back, barely legible: "First day. Don\'t tell them I was scared." - J. Alvarez',
+};
 
 export default {
   // Scene lifecycle entry point, called by sceneManager.js's mountScene()
@@ -84,7 +122,7 @@ export default {
   mount(container, ctx) {
     const flags = {
       lookedAround: false, sawReadme: false, sawHiddenList: false, sawAccessCode: false,
-      boxOpen: false, hasKeycard: false, codeEntered: false, doorUnlocked: false,
+      boxOpen: false, hasKeycard: false, hasPhoto: false, codeEntered: false, doorUnlocked: false,
     };
     const inventory = [];
     const history = [];
@@ -92,7 +130,15 @@ export default {
     let inventoryOverlay = null;
 
     const room = createRoom({ accent: '#39ff14', ariaLabel: 'Sector 0 room' });
-    room.setDecor(buildDecor());
+    room.setDecor(buildDecorOnly());
+    buildProps().forEach((def) => {
+      room.setHotspot(def.id, {
+        x: def.x, y: def.y,
+        build: () => [def.node()],
+        label: def.label,
+        onClick: () => onPropClick(def),
+      });
+    });
 
     const frame = terminalFrame({ title: 'SECTOR 0 // BOOT-UP :: root@echo:~$', accent: '#39ff14' });
     const log = el('div', { class: 'term-log', id: 'l1-log', role: 'log', 'aria-live': 'polite' });
@@ -117,6 +163,20 @@ export default {
     body.appendChild(metaRow);
     body.appendChild(inputRow);
     container.appendChild(el('div', { class: 'level1-scene split-scene' }, [room.el, frame]));
+
+    // Clicking open floor (not a hotspot, not a popup, not the player)
+    // just walks there — the room doesn't have to be a grid of buttons to
+    // be interactive. Any open overlay (box contents, keypad, inventory)
+    // is excluded outright: it's a child of room.el too, so a background
+    // click on it would otherwise bubble up here and walk the player at
+    // the same time it closes the popup.
+    room.el.addEventListener('click', (e) => {
+      if (e.target.closest('button, .inventory-overlay')) return;
+      const rect = room.el.getBoundingClientRect();
+      const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 4, 96);
+      const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 4, 96);
+      room.walkToPoint(x, y);
+    }, { signal: ctx.signal });
 
     const input = inputRow.querySelector('input');
 
@@ -202,16 +262,6 @@ export default {
         label: flags.boxOpen ? 'Open storage box' : 'Shut storage box',
         onClick: onBoxClick,
       });
-      if (flags.boxOpen && !flags.hasKeycard) {
-        room.setHotspot('box-keycard', {
-          x: 34, y: 66,
-          build: () => [drawKeycard('#39ff14', 6), el('span', {}, 'KEYCARD')],
-          label: 'Keycard inside the box',
-          onClick: onKeycardClick,
-        });
-      } else {
-        room.removeHotspot('box-keycard');
-      }
     }
 
     function renderDoor() {
@@ -238,31 +288,81 @@ export default {
     async function onBoxClick() {
       await room.walkTo('box');
       if (room.getActive() !== 'box') return;
+      showBoxBubble();
+    }
+
+    // Rebuildable, called after the box's own open/close state changes (not
+    // just from the initial walk-up click) so the bubble always offers the
+    // option matching what just happened, instead of requiring a second
+    // click on the box to catch up.
+    function showBoxBubble() {
+      if (room.getActive() !== 'box') return;
       if (!flags.boxOpen) {
         room.showBubble([{ label: 'OPEN BOX', onClick: () => { room.hideBubble(); openBox(); } }]);
       } else {
-        room.showBubble([{ label: 'CLOSE BOX', onClick: () => { room.hideBubble(); closeBox(); } }]);
+        room.showBubble([
+          { label: 'LOOK INSIDE', onClick: () => { room.hideBubble(); openBoxPopup(); } },
+          { label: 'CLOSE BOX', onClick: () => { room.hideBubble(); closeBox(); } },
+        ]);
       }
     }
 
-    async function onKeycardClick() {
-      room.showBubble([{ label: 'TAKE KEY CARD', onClick: () => { room.hideBubble(); takeKeycard(); } }]);
+    // Rebuildable set of terminal options, redrawn in place (no re-walk
+    // needed) whenever what's available changes — specifically, listing
+    // hidden files adds READ .ACCESS_CODE beside LIST HIDDEN FILES instead
+    // of replacing it.
+    function buildTerminalOpts() {
+      const opts = [
+        { label: 'LOOK', onClick: () => { room.hideBubble(); doLook(); } },
+        { label: 'READ README.TXT', onClick: () => { room.hideBubble(); readFile('readme.txt'); } },
+        { label: 'READ SECTOR.LOG', onClick: () => { room.hideBubble(); readFile('sector.log'); } },
+        { label: 'LIST HIDDEN FILES', onClick: async () => { await listHidden(); refreshTerminalBubble(); } },
+      ];
+      if (flags.sawHiddenList) {
+        opts.push({ label: 'READ .ACCESS_CODE', onClick: () => { room.hideBubble(); readFile('.access_code'); } });
+      }
+      opts.push({ label: 'HINT', onClick: () => { room.hideBubble(); printHint(); } });
+      return opts;
+    }
+    function refreshTerminalBubble() {
+      if (room.getActive() === 'terminal') room.showBubble(buildTerminalOpts());
     }
 
     async function onTerminalObjectClick() {
       await room.walkTo('terminal');
       if (room.getActive() !== 'terminal') return;
       sfx.terminalOpen();
-      const opts = [{ label: 'LOOK', onClick: () => { room.hideBubble(); doLook(); } }];
-      opts.push({ label: 'READ README.TXT', onClick: () => { room.hideBubble(); readFile('readme.txt'); } });
-      opts.push({ label: 'READ SECTOR.LOG', onClick: () => { room.hideBubble(); readFile('sector.log'); } });
-      if (!flags.sawHiddenList) {
-        opts.push({ label: 'LIST HIDDEN FILES', onClick: () => { room.hideBubble(); listHidden(); } });
+      room.showBubble(buildTerminalOpts());
+    }
+
+    // ---- background props: walk up, print a short LOOK description, and
+    // for the one prop that's also a pickup, offer TAKE alongside LOOK.
+    // None of this matters to solving the sector — it's here so the room
+    // doesn't feel like a puzzle box with set dressing taped on. ----
+    async function onPropClick(def) {
+      await room.walkTo(def.id);
+      if (room.getActive() !== def.id) return;
+      if (def.pickup && !def.pickup.taken) {
+        room.showBubble([
+          { label: 'LOOK', onClick: () => { room.hideBubble(); printRaw(def.desc); } },
+          { label: `TAKE ${def.pickup.label}`, onClick: () => { room.hideBubble(); takeProp(def); } },
+        ]);
       } else {
-        opts.push({ label: 'READ .ACCESS_CODE', onClick: () => { room.hideBubble(); readFile('.access_code'); } });
+        printRaw(def.desc);
       }
-      opts.push({ label: 'HINT', onClick: () => { room.hideBubble(); printHint(); } });
-      room.showBubble(opts);
+    }
+
+    async function takeProp(def) {
+      def.pickup.taken = true;
+      inventory.push({
+        id: def.id,
+        label: def.pickup.label,
+        node: def.pickup.node,
+        onUse: () => printRaw(def.pickup.lore, 'term-hint'),
+      });
+      sfx.select();
+      await printRaw(`${def.pickup.label} added to inventory.`, 'term-success');
+      await printRaw(def.pickup.lore, 'term-hint');
     }
 
     async function onDoorClick() {
@@ -307,6 +407,7 @@ export default {
       sfx.drawer();
       renderBox();
       await printRaw('The box lid creaks open. Something inside catches the light.');
+      openBoxPopup();
     }
 
     function closeBox() {
@@ -324,8 +425,78 @@ export default {
         onUse: useKeycard,
       });
       sfx.select();
-      renderBox();
       await printRaw('KEYCARD added to inventory.', 'term-success');
+    }
+
+    async function takePhoto() {
+      if (flags.hasPhoto) return;
+      flags.hasPhoto = true;
+      inventory.push({
+        id: 'photo',
+        label: BOX_LORE_ITEM.label,
+        node: BOX_LORE_ITEM.invNode,
+        onUse: () => printRaw(BOX_LORE_ITEM.lore, 'term-hint'),
+      });
+      sfx.select();
+      await printRaw(`${BOX_LORE_ITEM.label} added to inventory.`, 'term-success');
+      await printRaw(BOX_LORE_ITEM.lore, 'term-hint');
+    }
+
+    // A pop-up over the room showing what's actually inside the box: the
+    // keycard (functional), the photograph (pure lore, also collected),
+    // and 3-4 random filler items that are just there to poke at — clicking
+    // them prints a one-line flavor description in the terminal log, which
+    // stays visible on the right the whole time this popup is open.
+    function openBoxPopup() {
+      const filler = sample(BOX_FILLER_POOL, Math.min(randInt(3, 4), BOX_FILLER_POOL.length));
+      const items = [];
+      if (!flags.hasKeycard) items.push({ kind: 'keycard' });
+      if (!flags.hasPhoto) items.push({ kind: 'photo' });
+      filler.forEach((f) => items.push({ kind: 'filler', ...f }));
+
+      const grid = el('div', { class: 'inventory-grid' });
+      function renderGrid() {
+        grid.innerHTML = '';
+        if (items.length === 0) {
+          grid.appendChild(el('p', { class: 'inventory-empty' }, 'Just an empty box now.'));
+          return;
+        }
+        items.forEach((item, i) => {
+          let node; let label; let onclick;
+          if (item.kind === 'keycard') {
+            node = drawKeycard('#39ff14', 6);
+            label = 'KEYCARD';
+            onclick = async () => { await takeKeycard(); items.splice(i, 1); renderGrid(); };
+          } else if (item.kind === 'photo') {
+            node = BOX_LORE_ITEM.node();
+            label = BOX_LORE_ITEM.label;
+            onclick = async () => { await takePhoto(); items.splice(i, 1); renderGrid(); };
+          } else {
+            node = item.node();
+            label = item.label;
+            onclick = () => printRaw(item.flavor, 'term-hint');
+          }
+          grid.appendChild(el('button', { class: 'inventory-item', onclick }, [node, el('span', {}, label)]));
+        });
+      }
+      renderGrid();
+
+      const overlay = el('div', { class: 'inventory-overlay' }, [
+        el('div', { class: 'inventory-panel' }, [
+          el('div', { class: 'inventory-header' }, [
+            el('span', {}, 'INSIDE THE BOX'),
+            el('button', { class: 'inventory-close', 'aria-label': 'Close box', onclick: closePopup }, '✕'),
+          ]),
+          el('p', { class: 'term-hint' }, 'Dust and old junk. Something useful might be in here.'),
+          grid,
+        ]),
+      ]);
+      function closePopup() {
+        overlay.remove();
+        showBoxBubble();
+      }
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) closePopup(); });
+      room.el.appendChild(overlay);
     }
 
     function buildDoorPad() {

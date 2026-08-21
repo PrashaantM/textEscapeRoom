@@ -3,8 +3,9 @@
 // still works, flickering between static and pink) and, through its
 // openable door, a bio bay of the same shape but blue-tinted. Walking up
 // to and opening the pink terminal launches a Simon-style sequence-memory
-// minigame; the blue terminal (in the bio bay) launches a different,
-// simultaneous-reaction minigame (PETRI DASH). Clearing both lights both
+// minigame; the blue terminal (in the bio bay) launches a different, purely
+// logic-driven minigame (PETRI SWEEP, a small Minesweeper) — a deliberate
+// contrast to the pink terminal's reflex test. Clearing both lights both
 // terminals up permanently and knocks down the tech bay's second,
 // barricaded door, which — once the player has walked back through to the
 // tech bay — is the way out. Clearing it awards the second memory shard
@@ -13,11 +14,12 @@
 import { completeLevel, getState } from '../state.js';
 import { sfx } from '../audio.js';
 import { shake, glitchBurst } from '../fx.js';
-import { el, delay, randInt } from '../utils.js';
+import { el, delay, randInt, sample } from '../utils.js';
 import { terminalFrame, typeInto, showInterstitial } from './shared.js';
 import {
   drawDoor, drawSparkWire, drawGlassPod, drawBrokenTerminal, drawGoodTerminal, drawBarricade,
-  drawCabinet, drawLabFlask, drawPlantProp, drawVentProp,
+  drawCabinet, drawLabFlask, drawPlantProp, drawVentProp, drawElectricalBox, drawControlPanel,
+  drawMultiscreen, drawChairProp, drawCrateProp, drawLabDesk,
 } from '../sprites.js';
 import { createRoom } from './roomKit.js';
 
@@ -30,8 +32,10 @@ const PADS = [
 ];
 
 // Fixed background dressing for the tech bay: sparking wires, cracked
-// pods, dead terminals, and a couple of cabinets, scattered across the
-// full-screen room. Percentage coordinates.
+// pods, dead terminals, cabinets, and now a cluster of bulkier machinery
+// (panels, screens, crates) crowded around the pink terminal itself, so
+// it reads as one more thing buried in the clutter instead of the one
+// obvious object standing alone in an empty room. Percentage coordinates.
 function techDecor() {
   return [
     { x: 10, y: 15, node: el('div', { class: 'spark-wire' }, [drawSparkWire(7)]) },
@@ -47,12 +51,17 @@ function techDecor() {
     { x: 85, y: 90, node: drawCabinet('#ff2fd0', 6, undefined, 3) },
     { x: 48, y: 65, node: drawVentProp(6) },
     { x: 70, y: 88, node: drawVentProp(6) },
+    { x: 38, y: 30, node: drawMultiscreen(6) },
+    { x: 62, y: 28, node: drawCrateProp(false, 6) },
+    { x: 40, y: 44, node: drawCrateProp(true, 6) },
+    { x: 60, y: 46, node: drawElectricalBox(6) },
   ];
 }
 
 // Fixed background dressing for the bio bay: cracked bio-tanks, lab
 // flasks, and plants standing in for overgrowth, mirroring the tech bay's
-// layout with a green/blue palette instead.
+// layout with a green/blue palette instead, and the same trick of
+// clutter deliberately crowding the blue terminal.
 function bioDecor() {
   return [
     { x: 12, y: 18, node: drawGlassPod('#4cd6ff', 8) },
@@ -66,6 +75,41 @@ function bioDecor() {
     { x: 50, y: 92, node: drawPlantProp(6) },
     { x: 35, y: 30, node: drawBrokenTerminal(6) },
     { x: 90, y: 65, node: drawVentProp(6) },
+    { x: 38, y: 44, node: drawLabDesk(6) },
+    { x: 62, y: 46, node: drawCrateProp(false, 6) },
+    { x: 42, y: 26, node: drawMultiscreen(6) },
+  ];
+}
+
+// Extra clickable-but-optional set dressing, on top of the two working
+// terminals and the doors — walk up, get a line of flavor, nothing here
+// gates clearing the sector. One item per room is also a (purely narrative,
+// never inventoried) pickup, so the rooms don't feel completely empty of
+// things to poke at. Positioned apart from the decor above so nothing
+// double-stacks a hotspot on top of non-clickable set dressing.
+function techProps() {
+  return [
+    { id: 'tp-panel', x: 30, y: 55, node: () => drawControlPanel('#ff2fd0', 7), label: 'Control panel', desc: "The panel spits sparks whenever the base current shifts. You don't touch it twice." },
+    { id: 'tp-ebox', x: 70, y: 55, node: () => drawElectricalBox(7), label: 'Electrical box', desc: 'Breakers labeled A through F. All of them are already tripped.' },
+    { id: 'tp-chair', x: 22, y: 78, node: () => drawChairProp(6), label: 'Overturned chair', desc: "Overturned. Nobody's sat in it for a while." },
+    {
+      id: 'tp-crate', x: 78, y: 78, node: () => drawCrateProp(true, 7), label: 'Cracked crate',
+      desc: 'A cracked crate, packing straw spilling out.',
+      pickup: { label: 'SPARE FUSE', flavor: 'A fuse, still good. You pocket it out of habit.' },
+    },
+  ];
+}
+
+function bioProps() {
+  return [
+    { id: 'bp-desk', x: 30, y: 58, node: () => drawLabDesk(6), label: 'Lab bench', desc: 'A lab bench, covered in notes too smeared to read.' },
+    { id: 'bp-chair', x: 70, y: 58, node: () => drawChairProp(6), label: 'Toppled chair', desc: 'Knocked over mid-shift, by the look of it.' },
+    { id: 'bp-multiscreen', x: 20, y: 78, node: () => drawMultiscreen(6), label: 'Dead screens', desc: 'Six screens, six different kinds of static.' },
+    {
+      id: 'bp-crate', x: 80, y: 78, node: () => drawCrateProp(true, 7), label: 'Cracked crate',
+      desc: 'A cracked crate. Something inside clinks when you nudge it.',
+      pickup: { label: 'CRACKED VIAL', flavor: 'Empty, thankfully. You take it anyway.' },
+    },
   ];
 }
 
@@ -115,11 +159,18 @@ export default {
       });
       room.setHotspot('door-barricaded', {
         x: 15, y: 55,
+        // No "BARRICADED" text label — the planks-and-padlock sprite (see
+        // sprites.js's drawBarricade) has to read as barricaded on its
+        // own, layered right over the door via .door-barricade-wrap
+        // instead of stacked underneath it.
         build: () => flags.blueSolved
-          ? [drawDoor(false, 8), drawBarricade(true, 6), el('span', {}, 'DOOR: CLEAR')]
-          : [drawDoor(true, 8), drawBarricade(false, 6), el('span', {}, 'DOOR: BARRICADED')],
-        label: flags.blueSolved ? 'Barricade destroyed, door clear' : 'Barricaded, malfunctioning door',
+          ? [drawDoor(false, 8), el('span', {}, 'DOOR: CLEAR')]
+          : [el('div', { class: 'door-barricade-wrap' }, [drawDoor(true, 8), drawBarricade(false, 7)])],
+        label: flags.blueSolved ? 'Barricade destroyed, door clear' : 'A door, chained and barricaded shut',
         onClick: onDoorBarricadedClick,
+      });
+      techProps().forEach((def) => {
+        room.setHotspot(def.id, { x: def.x, y: def.y, build: () => [def.node()], label: def.label, onClick: () => onPropClick(def) });
       });
       if (entry) room.placeAt(85, 55);
     }
@@ -139,7 +190,32 @@ export default {
         label: 'Door back to the tech bay',
         onClick: onDoorBackClick,
       });
+      bioProps().forEach((def) => {
+        room.setHotspot(def.id, { x: def.x, y: def.y, build: () => [def.node()], label: def.label, onClick: () => onPropClick(def) });
+      });
       if (entry) room.placeAt(15, 55);
+    }
+
+    // ---- optional set dressing: walk up, print a flavor line; the one
+    // pickup per room is narrative only (there's no inventory panel in
+    // this sector), just something to find. Shared by both rooms. ----
+    async function onPropClick(def) {
+      await room.walkTo(def.id);
+      if (room.getActive() !== def.id) return;
+      if (def.pickup && !def.pickup.taken) {
+        room.showBubble([
+          { label: 'LOOK', onClick: () => { room.hideBubble(); printRaw(def.desc); } },
+          { label: `TAKE ${def.pickup.label}`, onClick: () => { room.hideBubble(); takeProp(def); } },
+        ]);
+      } else {
+        printRaw(def.desc);
+      }
+    }
+    async function takeProp(def) {
+      def.pickup.taken = true;
+      sfx.select();
+      await printRaw(`You pocket the ${def.pickup.label.toLowerCase()}.`, 'term-success');
+      await printRaw(def.pickup.flavor, 'term-hint');
     }
 
     async function crossTo(roomName, renderFn) {
@@ -183,7 +259,7 @@ export default {
       await delay(400, ctx.signal).catch(() => {});
       showInterstitial(container.querySelector('.level2-scene'), {
         levelIndex: 1,
-        storyBeat: 'ECHO: "Ha! Good reflexes, both hands. Those two labs were the first thing I ever loved about this place."',
+        storyBeat: 'ECHO: "Ha! Quick hands on one side, a clear head on the other. Those two labs were the first thing I ever loved about this place."',
         shardDigit: digit,
         ctaLabel: 'NEXT SECTOR ▶',
         onContinue: () => ctx.goTo('level3'),
@@ -209,7 +285,7 @@ export default {
       if (room.getActive() !== 'blue-terminal' || currentRoomName !== 'bio') return;
       if (flags.blueSolved) { printRaw('The terminal hums quietly online. Nothing left to do here.'); return; }
       sfx.terminalOpen();
-      openPetriMinigame({
+      openMinesweepMinigame({
         onWin: async () => {
           flags.blueSolved = true;
           renderBioRoom();
@@ -375,98 +451,181 @@ export default {
       startRound();
     }
 
-    // ---- minigame 2: PETRI DASH (simultaneous reaction, not sequence
-    // memory) — several dishes light up together for a shrinking window;
-    // the player must click every lit dish before it closes. ----
-    function openPetriMinigame({ onWin }) {
-      let round = 1;
+    // ---- minigame 2: PETRI SWEEP (a small Minesweeper) — deliberately
+    // the opposite of ARCADE ZERO: no timer, no reflexes. Reveal every
+    // clean dish in the rack; numbers count contaminated neighbors; a
+    // FLAG toggle lets the player mark suspects for their own bookkeeping.
+    // Hitting a contaminated dish costs a life and resets that rack (same
+    // difficulty, fresh layout) rather than ending the whole game. ----
+    const SWEEP_RACKS = [
+      { cols: 4, rows: 4, mines: 3 },
+      { cols: 5, rows: 4, mines: 5 },
+      { cols: 5, rows: 5, mines: 7 },
+    ];
+
+    function openMinesweepMinigame({ onWin }) {
+      let rackIdx = 0;
       let lives = 3;
       let phase = 'ready';
-      let remaining = new Set();
-      let timer = null;
+      let mode = 'dig';
+      let cols; let rows; let mineCount;
+      let mineSet = new Set();
+      let revealed = new Set();
+      let flagged = new Set();
+      let firstClick = true;
+      let cellEls = [];
 
       const hud = el('div', { class: 'arcade-hud' });
       const message = el('div', { class: 'arcade-message', 'aria-live': 'polite' });
-      const dishEls = [];
-      const grid = el('div', { class: 'petri-grid' });
-      for (let i = 0; i < 9; i++) {
-        const dish = el('button', { class: 'petri-dish', 'aria-label': `Dish ${i + 1}`, onclick: () => handleDish(i) });
-        dishEls.push(dish);
-        grid.appendChild(dish);
-      }
+      const digBtn = el('button', { class: 'cta-btn secondary sweep-mode-btn', onclick: () => setMode('dig') }, 'DIG');
+      const flagBtn = el('button', { class: 'cta-btn secondary sweep-mode-btn', onclick: () => setMode('flag') }, 'FLAG');
+      const modeRow = el('div', { class: 'sweep-mode-row' }, [digBtn, flagBtn]);
+      const grid = el('div', { class: 'mine-grid' });
 
       const overlay = el('div', { class: 'inventory-overlay' }, [
         el('div', { class: 'inventory-panel' }, [
           el('div', { class: 'inventory-header' }, [
-            el('span', {}, 'BLUE TERMINAL // PETRI DASH'),
+            el('span', {}, 'BLUE TERMINAL // PETRI SWEEP'),
             el('button', { class: 'inventory-close', 'aria-label': 'Close', onclick: () => overlay.remove() }, '✕'),
           ]),
-          hud, message, grid,
+          hud, message, modeRow, grid,
         ]),
       ]);
       room.el.appendChild(overlay);
-      renderHud();
-      message.textContent = 'Click every dish that lights up before it closes.';
+      message.textContent = 'Reveal every clean dish. Numbers count contaminated neighbors. No rush.';
+
+      function setMode(m) {
+        mode = m;
+        digBtn.classList.toggle('sweep-mode-btn--active', m === 'dig');
+        flagBtn.classList.toggle('sweep-mode-btn--active', m === 'flag');
+      }
 
       function renderHud() {
         hud.innerHTML = '';
-        hud.appendChild(el('span', {}, `ROUND ${Math.min(round, ROUNDS_TO_WIN)} / ${ROUNDS_TO_WIN}`));
+        hud.appendChild(el('span', {}, `RACK ${Math.min(rackIdx + 1, SWEEP_RACKS.length)} / ${SWEEP_RACKS.length}`));
         hud.appendChild(el('span', { class: 'lives' }, '♥'.repeat(lives) + '♡'.repeat(3 - lives)));
       }
 
-      function startRound() {
-        if (!alive) return;
-        dishEls.forEach((d) => d.classList.remove('petri-lit', 'petri-hit'));
-        const litCount = Math.min(2 + round, 6);
-        const idx = new Set();
-        while (idx.size < litCount) idx.add(randInt(0, 8));
-        remaining = idx;
-        idx.forEach((i) => { dishEls[i].classList.add('petri-lit'); sfx.pad(300 + i * 40); });
-        phase = 'active';
-        message.textContent = 'GO!';
-        const windowMs = Math.max(1700 - round * 140, 750);
-        clearTimeout(timer);
-        timer = setTimeout(() => { if (remaining.size > 0) missRound(); }, windowMs);
+      function neighbors(i) {
+        const x = i % cols; const y = Math.floor(i / cols);
+        const out = [];
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx; const ny = y + dy;
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) out.push(ny * cols + nx);
+          }
+        }
+        return out;
       }
 
-      function handleDish(i) {
-        if (phase !== 'active' || !remaining.has(i)) return;
-        remaining.delete(i);
-        dishEls[i].classList.remove('petri-lit');
-        dishEls[i].classList.add('petri-hit');
+      // First click is always safe: mines are placed only after it, never
+      // on that cell or its immediate neighbors, so no round can be lost
+      // to an unavoidable first guess.
+      function placeMines(safeIdx) {
+        const exclude = new Set([safeIdx, ...neighbors(safeIdx)]);
+        const pool = [];
+        for (let i = 0; i < cols * rows; i++) if (!exclude.has(i)) pool.push(i);
+        mineSet = new Set(sample(pool, Math.min(mineCount, pool.length)));
+      }
+
+      function startRack() {
+        if (!alive) return;
+        const cfg = SWEEP_RACKS[rackIdx];
+        cols = cfg.cols; rows = cfg.rows; mineCount = cfg.mines;
+        mineSet = new Set(); revealed = new Set(); flagged = new Set(); firstClick = true;
+        phase = 'active';
+        setMode('dig');
+        renderHud();
+        grid.innerHTML = '';
+        grid.style.setProperty('--cols', cols);
+        cellEls = [];
+        for (let i = 0; i < cols * rows; i++) {
+          const cell = el('button', { class: 'mine-cell', 'aria-label': `Dish ${i + 1}`, onclick: () => handleCell(i) });
+          cellEls.push(cell);
+          grid.appendChild(cell);
+        }
+      }
+
+      function countAdj(i) {
+        return neighbors(i).filter((n) => mineSet.has(n)).length;
+      }
+
+      function revealCell(i) {
+        if (revealed.has(i) || flagged.has(i)) return;
+        revealed.add(i);
+        const cell = cellEls[i];
+        cell.classList.add('mine-cell--revealed');
+        if (mineSet.has(i)) {
+          cell.classList.add('mine-cell--mine');
+          cell.textContent = '☣';
+          return;
+        }
+        const n = countAdj(i);
+        if (n === 0) {
+          neighbors(i).forEach((ni) => revealCell(ni));
+        } else {
+          cell.textContent = String(n);
+          cell.classList.add(`mine-cell--n${Math.min(n, 4)}`);
+        }
+      }
+
+      function handleCell(i) {
+        if (phase !== 'active' || !alive) return;
+        if (mode === 'flag') {
+          if (revealed.has(i)) return;
+          if (flagged.has(i)) {
+            flagged.delete(i);
+            cellEls[i].classList.remove('mine-cell--flag');
+            cellEls[i].textContent = '';
+          } else {
+            flagged.add(i);
+            cellEls[i].classList.add('mine-cell--flag');
+            cellEls[i].textContent = '⚑';
+            sfx.select();
+          }
+          return;
+        }
+        if (revealed.has(i) || flagged.has(i)) return;
+        if (firstClick) { placeMines(i); firstClick = false; }
+        if (mineSet.has(i)) {
+          sfx.error();
+          revealCell(i);
+          shake(grid);
+          missRack();
+          return;
+        }
         sfx.pop();
-        if (remaining.size === 0) { clearTimeout(timer); roundClear(); }
+        revealCell(i);
+        if (revealed.size === cols * rows - mineSet.size) roundClear();
       }
 
       async function roundClear() {
         phase = 'clear';
         sfx.success();
-        message.textContent = 'CLEARED!';
-        round++;
+        message.textContent = 'RACK CLEAR!';
+        rackIdx++;
         renderHud();
-        if (round > ROUNDS_TO_WIN) { winGame(); return; }
-        await delay(750);
+        if (rackIdx >= SWEEP_RACKS.length) { winGame(); return; }
+        await delay(1100);
         if (!alive) return;
-        startRound();
+        startRack();
       }
 
-      async function missRound() {
+      async function missRack() {
         phase = 'clear';
         lives--;
         renderHud();
-        sfx.error();
-        shake(grid);
-        dishEls.forEach((d) => d.classList.remove('petri-lit'));
         if (lives <= 0) {
-          message.textContent = 'CULTURE LOST.';
-          await delay(700);
+          message.textContent = 'CULTURE CONTAMINATED.';
+          await delay(900);
           if (alive) showContinue();
           return;
         }
-        message.textContent = 'MISSED ONE! AGAIN...';
-        await delay(800);
+        message.textContent = 'CONTAMINATED ONE. RACK RESET, SAME DIFFICULTY.';
+        await delay(1100);
         if (!alive) return;
-        startRound();
+        startRack();
       }
 
       function showContinue() {
@@ -480,7 +639,7 @@ export default {
               lives = 3;
               cont.remove();
               renderHud();
-              startRound();
+              startRack();
             },
           }, 'CONTINUE?'),
         ]);
@@ -494,7 +653,7 @@ export default {
         setTimeout(() => { overlay.remove(); onWin(); }, 700);
       }
 
-      startRound();
+      startRack();
     }
 
     renderTechRoom();

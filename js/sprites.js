@@ -726,6 +726,17 @@ export function drawBarricade(destroyed = false, unit = 8, className = 'sprite s
   b(0, 6, 12, 2, plank);
   b(1, 0, 2, 12, '#5e4626');
   b(9, 0, 2, 12, '#5e4626');
-  b(5, 9, 2, 3, '#ffb000');
+  // A chain slung across the planks, feeding into an unmistakable padlock
+  // (shackle + body + keyhole) instead of a plain warning square, so the
+  // "barricaded, and locked" reading doesn't depend on a text label.
+  const chainLight = '#aab4ba';
+  const chainDark = '#5b656b';
+  for (let i = 0; i < 5; i++) b(1.5 + i * 2, 3.4, 1.3, 1.3, i % 2 ? chainDark : chainLight);
+  b(4.3, 7.3, 0.9, 2, '#c9c9c9');
+  b(6.8, 7.3, 0.9, 2, '#c9c9c9');
+  b(4.3, 7.3, 3.4, 0.9, '#c9c9c9');
+  b(3.8, 8.2, 4.4, 3.4, '#20303d');
+  b(3.8, 8.2, 4.4, 0.8, '#151f27');
+  b(5.5, 9.4, 1, 1.2, '#ff4d5e');
   return canvas;
 }

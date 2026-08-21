@@ -569,6 +569,27 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   padding: 0;
   overflow: hidden;
   display: block;
+  cursor: pointer;
+  /* Two-tone wall/floor backdrop instead of an empty void: a wall band
+     above the horizon, a floor band below it, a skirting line at the
+     seam, and a floor grid, all tinted by this room's --accent (set
+     inline by roomKit.js) so every sector reads as a distinct place
+     instead of the same flat black box. */
+  background-color: #05070a;
+  background-image:
+    linear-gradient(to bottom,
+      transparent 0, transparent calc(64% - 3px),
+      color-mix(in srgb, var(--accent, #39ff14) 75%, #000) calc(64% - 3px),
+      color-mix(in srgb, var(--accent, #39ff14) 75%, #000) calc(64% + 3px),
+      transparent calc(64% + 3px), transparent 100%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent 30%, transparent 100%),
+    linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.65) 100%),
+    repeating-linear-gradient(90deg, #1b242d 0 92px, #131a21 92px 96px),
+    repeating-linear-gradient(115deg, #0a0f12 0 42px, #050809 42px 46px),
+    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--accent, #39ff14) 16%, transparent), transparent 65%);
+  background-size: 100% 100%, 100% 64%, 100% 36%, 100% 64%, 100% 36%, 100% 100%;
+  background-position: top, top, bottom, top, bottom, top;
+  background-repeat: no-repeat;
 }
 .room-decor-layer, .room-hotspot-layer { position: absolute; inset: 0; }
 .room-decor-layer { pointer-events: none; }
@@ -590,8 +611,8 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   background: rgba(5, 7, 10, 0.25);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.room-hotspot canvas { image-rendering: pixelated; filter: drop-shadow(0 0 6px rgba(57, 255, 20, 0.3)); }
-.room-hotspot:hover, .room-hotspot:focus-visible { border-color: var(--accent, #39ff14); background: rgba(57, 255, 20, 0.1); }
+.room-hotspot canvas { image-rendering: pixelated; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent, #39ff14) 30%, transparent)); }
+.room-hotspot:hover, .room-hotspot:focus-visible { border-color: var(--accent, #39ff14); background: color-mix(in srgb, var(--accent, #39ff14) 10%, transparent); }
 .room-hotspot--active { border-color: var(--accent, #39ff14); }
 
 .room-player {
@@ -714,8 +735,12 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 .term-input { flex: 1; background: transparent; border: none; font-size: 1.25rem; caret-color: var(--accent); }
 .term-input:focus { outline: none; }
 
-/* pixel-art room diorama above the terminal */
-.room-scene {
+/* pixel-art room diorama above the terminal (the old, non-free-roam
+   layout). Explicitly excludes .room-scene--free: both classes land on
+   the same element in roomKit.js's rooms, and without this guard these
+   rules — being later in the file — would win the cascade over the
+   free-roam layout above and collapse it back into a padded flex box. */
+.room-scene:not(.room-scene--free) {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -893,26 +918,55 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   .room-scene--transition { animation: none; }
 }
 
-/* ---- Sector 1's second minigame: PETRI DASH (simultaneous-reaction, as
-   opposed to ARCADE ZERO's sequence-memory) ---- */
-.petri-grid {
+/* ---- Sector 1's second minigame: PETRI SWEEP (a small Minesweeper —
+   logic, not reflexes, as a deliberate contrast to ARCADE ZERO's
+   sequence-memory reaction game) ---- */
+.sweep-mode-row { display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.3rem; }
+.sweep-mode-btn { padding: 0.35rem 1rem; font-size: 0.6rem; }
+.sweep-mode-btn--active { border-color: #4cd6ff; color: #4cd6ff; background: rgba(76, 214, 255, 0.14); }
+
+.mine-grid {
   display: grid;
-  grid-template-columns: repeat(3, 84px);
-  grid-template-rows: repeat(3, 84px);
-  gap: 0.5rem;
+  grid-template-columns: repeat(var(--cols, 4), minmax(2.2rem, 56px));
+  gap: 0.4rem;
   justify-content: center;
-  margin: 1rem auto;
+  margin: 0.85rem auto 0;
 }
-.petri-dish {
-  border-radius: 50%;
-  border: 3px solid #2f9e5b;
-  background: color-mix(in srgb, #2f9e5b 10%, #0c1116);
-  transition: transform 0.05s ease;
+.mine-cell {
+  aspect-ratio: 1;
+  border: 2px solid #20303d;
+  border-radius: 4px;
+  background: #141b23;
+  color: var(--fg-dim);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-.petri-dish:hover:not(.petri-lit) { filter: brightness(1.25); box-shadow: 0 0 12px #2f9e5b; }
-.petri-dish:active { transform: scale(0.94); }
-.petri-dish.petri-lit { background: #2f9e5b; box-shadow: 0 0 24px #2f9e5b; }
-.petri-dish.petri-hit { background: #4cd6ff; border-color: #4cd6ff; box-shadow: 0 0 24px #4cd6ff; }
+.mine-cell:hover:not(.mine-cell--revealed) { border-color: #4cd6ff; background: #1a232d; }
+.mine-cell:active:not(.mine-cell--revealed) { transform: scale(0.93); }
+.mine-cell--revealed { background: #05080a; cursor: default; }
+.mine-cell--n1 { color: #4cd6ff; }
+.mine-cell--n2 { color: #9dff5c; }
+.mine-cell--n3 { color: #ff4d5e; }
+.mine-cell--n4 { color: #ff2fd0; }
+.mine-cell--mine { background: #431417; border-color: #ff4d5e; color: #ff4d5e; box-shadow: 0 0 14px rgba(255, 77, 94, 0.55); }
+.mine-cell--flag { color: #ffe066; border-color: #ffe066; background: rgba(255, 224, 102, 0.08); }
+.mine-cell--safe { border-color: #2f9e5b; color: #2f9e5b; }
+
+/* ---- Sector 1: the barricaded door — planks + chained padlock layered
+   directly over the door sprite instead of stacked underneath it, and no
+   text label, so the barricade itself has to read as a barricade. ---- */
+.door-barricade-wrap { position: relative; display: inline-block; }
+.door-barricade-wrap .sprite-decor {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  transform: translate(-50%, -50%) rotate(-5deg);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.7));
+}
 
 /* ========================================================================
    Level 3: breaker ward
