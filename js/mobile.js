@@ -21,7 +21,19 @@ const PROMPT_MS = 2000;
 // reserves in the document flow). Called on init and on every
 // resize/orientationchange, and whenever scene content changes height.
 function applyScale(outer, inner) {
-  const scale = window.innerWidth / REF_WIDTH;
+  // index.html's head script force-widens the layout viewport to REF_WIDTH
+  // (so this file's fixed-width layout never hits css/style.css's normal
+  // responsive breakpoints) *before* this ever runs. That means
+  // window.innerWidth reports REF_WIDTH here, always — not the device's
+  // real width — so `window.innerWidth / REF_WIDTH` was permanently 1: no
+  // shrink ever applied, and the whole desktop-proportioned room rendered
+  // at full 1280px width on top of the real (much narrower) phone screen,
+  // with everything past the visible edge simply unreachable.
+  // window.visualViewport.scale is the browser's own auto-zoom-to-fit
+  // ratio for exactly this situation (a layout viewport wider than the
+  // device), i.e. deviceWidth/REF_WIDTH already, and it updates live on
+  // rotation, so it doubles as the value this function needs.
+  const scale = window.visualViewport ? window.visualViewport.scale : window.innerWidth / REF_WIDTH;
   inner.style.transform = `scale(${scale})`;
   outer.style.height = `${inner.scrollHeight * scale}px`;
 }
