@@ -583,16 +583,19 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   perspective-origin: 50% 30%;
 }
 
-/* Shared 3D stage: every face below is a preserve-3d child of this, so
-   their individual rotate/translateZ transforms compose against one
-   consistent camera instead of each other. */
-.room-3d { position: absolute; inset: 0; transform-style: preserve-3d; }
-
 .room-face {
   position: absolute;
   transform-style: preserve-3d;
   background-repeat: no-repeat;
   box-shadow: inset 0 0 8cqmin rgba(0, 0, 0, 0.4);
+  /* A face's own rectangle (even the transformed, still-rectangular wall
+     faces) is bigger on screen than its visible texture, so left at the
+     default `auto` it would silently block clicks meant for whatever is
+     behind or beside it — most importantly, floor items sitting "in
+     front of" a wall face reaching further down-screen than the wall's
+     own visible bottom edge. Hotspot buttons (wall or floor) opt back
+     into `auto` explicitly below, so they're the only clickable part. */
+  pointer-events: none;
 }
 /* Items live in a plain (non-rotated-again) layer pinned to their face, at
    plain left/top percentages — the face's own transform does the 3D work,
@@ -713,10 +716,11 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
    matching the perspective the background floor texture implies, without
    any of them actually living inside a 3D transform. */
 /* pointer-events:none so the (invisible, room-filling) container never
-   shadows wall hotspots sitting "behind" it in the real 3D stage; hotspot
-   buttons opt back into auto below so they stay clickable. */
+   shadows whatever's rendered after it (the wall faces — see the
+   .room-face comment above); the bubble opts back into auto below so it
+   stays clickable (hotspots, wall or floor, do the same on the shared
+   .room-hotspot rule further down). */
 .room-floor-sprites { position: absolute; inset: 0; pointer-events: none; }
-.room-floor-sprites .room-hotspot,
 .room-floor-sprites .room-bubble { pointer-events: auto; }
 .room-floor-sprites .room-decor-item,
 .room-floor-sprites .room-hotspot,
@@ -728,6 +732,9 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 
 .room-hotspot {
   position: absolute;
+  /* Always clickable regardless of which (pointer-events:none) face or
+     layer it's nested in — see the .room-face comment above. */
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   align-items: center;

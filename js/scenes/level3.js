@@ -89,7 +89,11 @@ function wardProps() {
     // ---- floor: 5 tanks ----
     { id: 'tank1', x: 10, y: 74, node: () => drawAquariumTank('#2f9e5b', 10), label: 'Aquarium tank', desc: 'Algae-green water. Something small darts away from the glass.' },
     { id: 'tank2', x: 10, y: 92, node: () => drawAquariumTank('#4cd6ff', 10), label: 'Aquarium tank', desc: 'Cracked at the base. This one’s already leaking into the flood.' },
-    { id: 'tank3', x: 88, y: 72, node: () => drawAquariumTank('#2f9e5b', 10), label: 'Aquarium tank', desc: 'Empty. Whatever lived here got out before you did.' },
+    // Position nudged from its original (88, 72) — that close to both the
+    // wall and the door mounted above it (x:92), this tank's own size at
+    // the room's real depth ended up covering the door's clickable area
+    // entirely; moved further left and only slightly deeper.
+    { id: 'tank3', x: 70, y: 80, node: () => drawAquariumTank('#2f9e5b', 10), label: 'Aquarium tank', desc: 'Empty. Whatever lived here got out before you did.' },
     { id: 'tank4', x: 88, y: 92, node: () => drawAquariumTank('#4cd6ff', 9), label: 'Aquarium tank', desc: 'A feeding label, faded past reading.' },
     { id: 'tank5', x: 50, y: 94, node: () => drawAquariumTank('#2f9e5b', 9), label: 'Aquarium tank', desc: 'Bubbles still rise from a filter that shouldn’t still be running.' },
   ];

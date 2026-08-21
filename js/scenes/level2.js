@@ -62,7 +62,11 @@ function techProps() {
     { id: 'tp-pod-1', x: 14, y: 76, node: () => drawGlassPod('#ff8a8a', 8), label: 'Cracked containment pod', desc: 'The glass is fogged over. You choose not to wonder why.' },
     { id: 'tp-pod-2', x: 52, y: 90, node: () => drawGlassPod('#ff8a8a', 7), label: 'Cracked containment pod', desc: "Empty, or empty enough that you don't check twice." },
     { id: 'tp-terminal-dead-1', x: 32, y: 82, node: () => drawBrokenTerminal(7), label: 'Dead terminal', desc: 'Cracked screen, dead for good. Not the one you need.' },
-    { id: 'tp-terminal-dead-2', x: 90, y: 70, node: () => drawBrokenTerminal(6), label: 'Dead terminal', desc: 'Another dead one. This whole bay is mostly corpses.' },
+    // y nudged from its original 70 — close enough to the wall that this
+    // prop rendered mostly behind the door mounted above it (x:85) once
+    // the room's real depth brought near-wall floor props and nearby wall
+    // fixtures visually close together.
+    { id: 'tp-terminal-dead-2', x: 90, y: 84, node: () => drawBrokenTerminal(6), label: 'Dead terminal', desc: 'Another dead one. This whole bay is mostly corpses.' },
     { id: 'tp-cabinet-1', x: 6, y: 92, node: () => drawCabinet('#ff2fd0', 6, undefined, 2), label: 'Cabinet', desc: 'Rattles when you lean on it. Empty inside.' },
     { id: 'tp-cabinet-2', x: 68, y: 94, node: () => drawCabinet('#ff2fd0', 6, undefined, 3), label: 'Cabinet', desc: 'Jammed shut. Not worth the effort.' },
     { id: 'tp-crate-plain', x: 80, y: 72, node: () => drawCrateProp(false, 6), label: 'Crate', desc: 'Sealed. Heavier than it looks.' },

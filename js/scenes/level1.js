@@ -86,7 +86,11 @@ function buildProps() {
     { id: 'prop-flask-1', x: 70, y: 70, node: () => drawLabFlask('#39ff14', 6), label: 'Cracked flask', desc: 'A cracked flask on the desk, long since dried out.' },
     { id: 'prop-desk-2', x: 20, y: 84, node: () => drawSciDesk('#39ff14', 6), label: 'Carved desk', desc: "Someone carved 'J.A. WAS HERE' into the wood." },
     { id: 'prop-flask-2', x: 24, y: 78, node: () => drawLabFlask('#39ff14', 6), label: 'Empty flask', desc: 'Whatever was brewing in this one evaporated years ago.' },
-    { id: 'prop-cabinet-3', x: 91, y: 68, node: () => drawCabinet('#39ff14', 6, undefined, 2), label: 'Open cabinet', desc: "This one's unlocked, and empty. Somebody beat you to it." },
+    // y nudged from its original 68 — that close to the wall, this cabinet
+    // rendered almost entirely behind the terminal (world x:78) mounted on
+    // the wall right above it once the room's real depth made floor props
+    // this near the wall project close to where nearby wall fixtures sit.
+    { id: 'prop-cabinet-3', x: 91, y: 82, node: () => drawCabinet('#39ff14', 6, undefined, 2), label: 'Open cabinet', desc: "This one's unlocked, and empty. Somebody beat you to it." },
     { id: 'prop-locker-3', x: 84, y: 86, node: () => drawLocker('#39ff14', 6), label: 'Named locker', desc: "Locked. A faded nameplate reads 'J. ALVAREZ.'" },
     { id: 'prop-shelf', x: 14, y: 90, node: () => drawShelf('#39ff14', 7), label: 'Shelf of binders', desc: 'A shelf of ring binders, spines unlabeled. None of them budge.' },
     { id: 'prop-plant-1', x: 4, y: 92, node: () => drawPlantProp(7), label: 'Plastic plant', desc: 'A plastic plant, dust standing in for dew.' },

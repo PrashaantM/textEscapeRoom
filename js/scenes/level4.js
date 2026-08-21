@@ -313,7 +313,10 @@ export default {
       { id: 'hub-light-1', x: 10, y: 8, node: () => drawWallLight('#ffd166', 6), label: 'Wall light', desc: 'A wall light, humming faint and steady.' },
       { id: 'hub-light-2', x: 90, y: 8, node: () => drawWallLight('#ffd166', 6), label: 'Wall light', desc: 'Flickers on a delay, like it’s thinking about it.' },
       { id: 'hub-cabinet-1', x: 8, y: 78, node: () => drawCabinet('#00ff9c', 8, undefined, 2), label: 'Cabinet', desc: 'Locked. Whatever paperwork lives in here isn’t leaving with you.' },
-      { id: 'hub-cabinet-2', x: 92, y: 78, node: () => drawCabinet('#00ff9c', 8, undefined, 2), label: 'Cabinet', desc: 'Empty drawers, every one. Somebody cleared this out already.' },
+      // y nudged from its original 78 — close enough to the wall that this
+      // cabinet rendered mostly behind the lab door mounted above it
+      // (x:85) once the room's real depth brought them visually close.
+      { id: 'hub-cabinet-2', x: 92, y: 90, node: () => drawCabinet('#00ff9c', 8, undefined, 2), label: 'Cabinet', desc: 'Empty drawers, every one. Somebody cleared this out already.' },
       { id: 'hub-plant-1', x: 20, y: 90, node: () => drawPlantProp(8), label: 'Plastic plant', desc: 'Plastic, unconvincingly. Nobody watered anything down here.' },
       { id: 'hub-plant-2', x: 80, y: 90, node: () => drawPlantProp(8), label: 'Plastic plant', desc: 'A thin layer of dust standing in for soil.' },
     ];

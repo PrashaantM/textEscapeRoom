@@ -14,7 +14,7 @@ import { drawPlayer } from '../sprites.js';
 
 const FOOTSTEP_MS = 150;
 
-// The room is a real 3D corner (see .room-scene--free/.room-3d in
+// The room is a real 3D corner (see .room-scene--free/.room-face in
 // style.css): a side wall and a back wall, each an actual
 // `transform-style:preserve-3d` plane under a shared `perspective`, meeting
 // at a corner above a tilted floor plane — not a flat image faking one.
@@ -26,6 +26,27 @@ const FOOTSTEP_MS = 150;
 // object tables themselves never needed to change when the room went 3D.
 export const ROOM_HORIZON = 62; // y% — the wall/floor seam. Wall: y < this. Floor: y >= this.
 export const ROOM_CORNER = 16; // x% — the side-wall/back-wall seam, wall band only.
+
+// Mirrors of the CSS 3D constants in .room-scene--free/.room-wall-back/
+// .room-floor (style.css) — perspective distance, the perspective-origin's
+// y%, and the wall/floor connection depth (both in cqmin, so their ratio
+// is resolution- and aspect-independent). Kept here only to derive
+// FLOOR_HINGE_PCT below; if those CSS values change, update these to match.
+const CSS_PERSPECTIVE = 78;
+const CSS_ORIGIN_Y_PCT = 30;
+const CSS_WALL_DEPTH = 28;
+
+// Where the wall base *actually* renders on screen (as a % of room height),
+// derived from the CSS perspective math above, rather than reusing
+// ROOM_HORIZON (62%) directly. ROOM_HORIZON is a *data* threshold — where
+// the flat, unprojected 0-100 coordinate space splits wall from floor —
+// not a screen position; projecting a point at that data-height through
+// the real 3D transform lands it here instead, closer to mid-screen. Using
+// 62% as if it were the visual seam (as projectFloor() briefly did) walked
+// the player and every floor prop noticeably below the wall's actual base,
+// reading as "can't reach the wall" and as a dead strip of empty floor.
+const FLOOR_HINGE_PCT = CSS_ORIGIN_Y_PCT
+  + (ROOM_HORIZON - CSS_ORIGIN_Y_PCT) * (CSS_PERSPECTIVE / (CSS_PERSPECTIVE + CSS_WALL_DEPTH));
 
 // Sorts a flat (x, y) percentage into a plane ('wall-side' | 'wall-back' |
 // 'floor') plus that plane's own *local* left/top percentages. Wall-side
@@ -80,9 +101,9 @@ function projectFloor(lx, ly) {
   // close enough on screen to shadow each other's clicks. This keeps a
   // real "nearer/bigger, farther/smaller" read without recreating that.
   const t = Math.max(0, Math.min(1, ly / 100));
-  const scale = 0.5 + 0.65 * t;
-  const spread = 0.42 + 0.58 * t;
-  const yPct = ROOM_HORIZON + (t ** 1.6) * (100 - ROOM_HORIZON);
+  const scale = 0.62 + 0.65 * t;
+  const spread = 0.5 + 0.5 * t;
+  const yPct = FLOOR_HINGE_PCT + (t ** 1.6) * (100 - FLOOR_HINGE_PCT);
   const xPct = 50 + (lx - 50) * spread;
   return { xPct, yPct, scale };
 }
@@ -102,15 +123,23 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
   // whichever one classify() picks, and those genuinely live inside the
   // rotated plane. The floor face is background-only (see projectFloor()
   // above for why) — everything standing on it renders instead in
-  // floorSprites, a flat 2D layer stacked on top of the whole 3D stage.
+  // floorSprites, a flat 2D layer. Each face gets `perspective` straight
+  // from .room-scene--free (no shared preserve-3d wrapper needed, since
+  // nothing here relies on the faces z-sorting against each other — see
+  // the .room-layer comment in style.css) so their DOM order can instead
+  // be chosen purely for paint/click priority: floorFace (background)
+  // first, then floorSprites (furniture, the player) on top of it, then
+  // the wall faces last, on top of everything — a floor prop standing
+  // close enough to the wall base to visually lap onto it (normal, e.g. a
+  // cabinet flush against the wall) must never be able to steal a click
+  // meant for a wall-mounted hotspot sitting right behind it.
   const wallSideLayer = el('div', { class: 'room-layer' });
   const wallBackLayer = el('div', { class: 'room-layer' });
   const wallSideFace = el('div', { class: 'room-face room-wall-side' }, [wallSideLayer]);
   const wallBackFace = el('div', { class: 'room-face room-wall-back' }, [wallBackLayer]);
   const floorFace = el('div', { class: 'room-face room-floor' });
-  const stage3d = el('div', { class: 'room-3d' }, [wallSideFace, wallBackFace, floorFace]);
   const floorSprites = el('div', { class: 'room-floor-sprites' });
-  roomEl.append(stage3d, floorSprites);
+  roomEl.append(floorFace, floorSprites, wallSideFace, wallBackFace);
 
   const layers = { 'wall-side': wallSideLayer, 'wall-back': wallBackLayer };
 
