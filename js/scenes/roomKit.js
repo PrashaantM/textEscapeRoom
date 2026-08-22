@@ -108,6 +108,30 @@ function projectFloor(lx, ly) {
   return { xPct, yPct, scale };
 }
 
+// Inverts projectFloor() — given a click position in screen percentages
+// (relative to the room box), returns the world (x, y) — the same flat
+// coordinate space every hotspot/decor table already uses — whose floor
+// projection lands back on that exact screen point. Without this, the
+// open-floor click handler below fed a raw screen-space percentage into
+// walkToXY() as if it were already a world coordinate, so projectFloor()
+// (a nonlinear perspective transform) projected it a *second* time,
+// landing the player somewhere other than where the click actually was —
+// worse the further off-center the click, since both the depth curve and
+// the depth-based x-spread below are nonlinear.
+function screenToWorld(xPctScreen, yPctScreen) {
+  // projectFloor() raises the depth fraction to the 1.6 power on the way
+  // out (rawT here IS that t**1.6), so recovering the depth fraction
+  // itself — not just rawT — needs the matching root; skipping this is
+  // the difference between "close" and "exact" everywhere except the two
+  // depth extremes (t=0 or t=1), where the power doesn't move the value.
+  const rawT = Math.max(0, Math.min(1, (yPctScreen - FLOOR_HINGE_PCT) / (100 - FLOOR_HINGE_PCT)));
+  const t = rawT ** (1 / 1.6);
+  const spread = 0.5 + 0.5 * t;
+  const worldX = 50 + (xPctScreen - 50) / spread;
+  const worldY = ROOM_HORIZON + t * (100 - ROOM_HORIZON);
+  return { x: worldX, y: worldY };
+}
+
 // Creates a walkable room: a `position:relative` box (room-scene--free) that
 // fills its half of the split-scene layout. Returns an API for scattering
 // decor, placing/removing clickable hotspots, walking the player between
@@ -164,9 +188,10 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
     if (e.target.closest('button, .inventory-overlay')) return;
     const rect = roomEl.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
-    const x = Math.max(4, Math.min(96, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.max(4, Math.min(96, ((e.clientY - rect.top) / rect.height) * 100));
-    walkToPoint(x, y);
+    const xPctScreen = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPctScreen = ((e.clientY - rect.top) / rect.height) * 100;
+    const { x, y } = screenToWorld(xPctScreen, yPctScreen);
+    walkToPoint(Math.max(4, Math.min(96, x)), y);
   });
 
   const hotspots = new Map(); // id -> { x, y, plane, btn }
@@ -369,8 +394,84 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
   function getActive() { return activeId; }
   function isWalking() { return walking; }
 
+  // Nudges apart any decor/hotspot whose actually-rendered boxes overlap,
+  // pooling all three layers (wall-side, wall-back, floor) into one pass
+  // rather than checking each in isolation — the recurring "x/y nudged
+  // from its original N" fixes across every sector file were *cross-layer*
+  // collisions (a floor prop reaching up into a wall fixture's screen
+  // area, e.g. Sector 0's cabinet vs. the terminal above it), which two
+  // same-layer-only passes would never even compare against each other.
+  // Reads real getBoundingClientRect() boxes instead of assumed sprite
+  // sizes (sprites.js's canvas sizes aren't known here), so this keeps
+  // working if sprite sizes change later instead of rotting like
+  // hand-picked coordinates do. Call once after a room's hotspots/decor
+  // for a given screen are all in place.
+  function declutter() {
+    requestAnimationFrame(() => {
+      // Each item's `left:%` is resolved against its OWN layer's local
+      // (pre-3D-transform) box width, not the screen-projected width
+      // getBoundingClientRect() would report for a rotated wall face —
+      // those two differ a lot for the side wall specifically (rotateY
+      // foreshortens it hard), so nudging via the wrong one would send an
+      // item flying by a wildly wrong amount. offsetWidth is unaffected by
+      // CSS transforms, so it's the right basis for every layer, floor
+      // included (where it's also just the room's own on-screen width,
+      // since the floor layer isn't transformed at all).
+      const layers = [wallSideLayer, wallBackLayer, floorSprites];
+      const items = [];
+      layers.forEach((layer) => {
+        const localWidth = layer.offsetWidth;
+        if (!localWidth) return;
+        [...layer.children].forEach((node) => {
+          if (node.classList.contains('room-decor-item') || node.classList.contains('room-hotspot')) {
+            items.push({ node, localWidth });
+          }
+        });
+      });
+      if (items.length < 2) return;
+
+      const PAD = 6; // px of screen-space breathing room to leave between boxes
+      const MAX_PASSES = 20;
+      // Fraction of each pass's computed correction to actually apply. Any
+      // item squeezed between two neighbors on opposite sides (three floor
+      // props in a row is common set dressing) gets pushed toward each one
+      // by a full, independently-computed "close this gap" amount every
+      // pass — measured (not assumed): pushing the full amount put such a
+      // trio into a stable back-and-forth cycle that never settled, even
+      // given 30 passes, since each pass's fix for one side re-opened the
+      // other. Damping every push to a fraction of that amount stops the
+      // overshoot that drives the cycle, so the (still slightly
+      // conflicting) net pushes each neighbor received keep accumulating
+      // in the same direction pass over pass instead of cancelling out.
+      const RELAXATION = 0.5;
+      const nudge = (item, pushPx) => {
+        const current = parseFloat(item.node.style.left) || 0;
+        const deltaPct = (pushPx / item.localWidth) * 100;
+        item.node.style.left = `${Math.max(2, Math.min(98, current + deltaPct))}%`;
+      };
+      for (let pass = 0; pass < MAX_PASSES; pass++) {
+        let movedAny = false;
+        const rects = items.map((it) => it.node.getBoundingClientRect());
+        for (let i = 0; i < items.length; i++) {
+          for (let j = i + 1; j < items.length; j++) {
+            const a = rects[i]; const b = rects[j];
+            const overlapX = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+            const overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+            if (overlapX + PAD <= 0 || overlapY + PAD <= 0) continue;
+            const push = ((overlapX + PAD) / 2) * RELAXATION;
+            const dir = (a.left + a.width / 2) <= (b.left + b.width / 2) ? -1 : 1;
+            nudge(items[i], dir * push);
+            nudge(items[j], -dir * push);
+            movedAny = true;
+          }
+        }
+        if (!movedAny) break;
+      }
+    });
+  }
+
   return {
-    el: roomEl, setDecor, setHotspot, removeHotspot, clearHotspots, walkTo, walkToPoint, placeAt, showBubble, hideBubble, getActive, isWalking,
+    el: roomEl, setDecor, setHotspot, removeHotspot, clearHotspots, walkTo, walkToPoint, placeAt, showBubble, hideBubble, getActive, isWalking, declutter,
   };
 }
 

@@ -294,6 +294,7 @@ export default {
         const meta = doorMeta.find((d) => d.id === fromId);
         if (meta) room.placeAt(meta.x, meta.y);
       }
+      room.declutter();
     }
     const doorMeta = [
       { id: 'room1', x: 15, y: 58, label: 'File storage room door' },
@@ -495,6 +496,7 @@ export default {
       });
 
       addBackDoor('room1');
+      room.declutter();
     }
 
     // ---- Room 2: security — a big multiscreen, 4 monitor sections, a
@@ -537,6 +539,7 @@ export default {
       });
 
       addBackDoor('room2');
+      room.declutter();
     }
 
     // ---- Room 3: electrical — 8 lockers, an electrical box, 2 vents (one
@@ -590,6 +593,7 @@ export default {
       }
 
       addBackDoor('room3');
+      room.declutter();
     }
 
     // ---- Room 4: laboratory — a decoy. Nothing here has a clue. ----
@@ -629,6 +633,7 @@ export default {
       }));
 
       addBackDoor('room4');
+      room.declutter();
     }
 
     const ROOM_RENDERERS = { room1: renderRoom1, room2: renderRoom2, room3: renderRoom3, room4: renderRoom4 };

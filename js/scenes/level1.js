@@ -638,6 +638,7 @@ export default {
     renderBox();
     renderDoor();
     renderTerminalObject();
+    room.declutter();
     printLines(['TERMINAL READY.', 'Walk to the box, the terminal, or the door to act on them.']);
   },
 };

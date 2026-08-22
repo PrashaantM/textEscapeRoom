@@ -162,6 +162,7 @@ export default {
         room.setHotspot(def.id, { x: def.x, y: def.y, build: () => [def.node()], label: def.label, onClick: () => onPropClick(def) });
       });
       if (entry) room.placeAt(85, 58);
+      room.declutter();
     }
 
     function renderBioRoom(entry) {
@@ -182,6 +183,7 @@ export default {
         room.setHotspot(def.id, { x: def.x, y: def.y, build: () => [def.node()], label: def.label, onClick: () => onPropClick(def) });
       });
       if (entry) room.placeAt(15, 58);
+      room.declutter();
     }
 
     // ---- optional set dressing: walk up, print a flavor line; the one

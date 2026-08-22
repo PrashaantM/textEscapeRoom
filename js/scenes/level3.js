@@ -284,6 +284,7 @@ export default {
         label: doorReached ? 'Door, panel powered' : 'Door at the end of the path',
         onClick: onDoorClick,
       });
+      room.declutter();
     }
 
     // ---- optional set dressing: walk up, print a flavor line; one
@@ -364,6 +365,7 @@ export default {
         onClick: onExitClick,
       });
       room.placeAt(50, 80);
+      room.declutter();
       puzzlePane.innerHTML = '';
       timerEl.textContent = '';
       puzzlePane.appendChild(el('p', { class: 'level-intro' }, 'The water drains through the grates below. Beyond the broken door: green, growing things, and a way up ahead.'));
