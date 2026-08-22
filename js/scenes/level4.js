@@ -474,7 +474,17 @@ export default {
         onInvestigate: () => logLine(sample(DECOY_LINES, 1)[0]),
       }));
 
-      const posterSpots = scatter(9, { xMin: 8, xMax: 92, yMin: 38, yMax: 50, cols: 5 });
+      // yMax nudged from its original 50 — that close to the closet door
+      // fixed at y:54 below, a large-sample Playwright audit (100+ fresh
+      // room loads) still turned up an occasional overlap between a poster
+      // and the closet (roomKit.js's declutter() only nudges left/right,
+      // so it can't open vertical breathing room on its own). Raising
+      // MAX_PASSES didn't fix it either — it just as often surfaced a
+      // *different* overlapping pair instead, the signature of genuine
+      // overcrowding rather than slow convergence. 47 restores roughly the
+      // same 6-7pp gap the paper-pile row above already keeps clear of
+      // this row (32 to 38).
+      const posterSpots = scatter(9, { xMin: 8, xMax: 92, yMin: 38, yMax: 47, cols: 5 });
       const clueIdx = randInt(0, 8);
       posterSpots.forEach((p, i) => {
         let found = false;

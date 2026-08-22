@@ -152,18 +152,19 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
   // nothing here relies on the faces z-sorting against each other — see
   // the .room-layer comment in style.css) so their DOM order can instead
   // be chosen purely for paint/click priority: floorFace (background)
-  // first, then floorSprites (furniture, the player) on top of it, then
-  // the wall faces last, on top of everything — a floor prop standing
-  // close enough to the wall base to visually lap onto it (normal, e.g. a
-  // cabinet flush against the wall) must never be able to steal a click
-  // meant for a wall-mounted hotspot sitting right behind it.
+  // first, then both wall faces, then floorSprites (furniture, the player)
+  // last, on top of everything — floor content should never paint behind a
+  // wall just because a prop's box happens to visually lap onto it near
+  // the wall base (normal, e.g. a cabinet flush against the wall). Wall
+  // hotspots keep click priority over floor hotspots regardless of this
+  // DOM order via .room-hotspot--wall's z-index in style.css.
   const wallSideLayer = el('div', { class: 'room-layer' });
   const wallBackLayer = el('div', { class: 'room-layer' });
   const wallSideFace = el('div', { class: 'room-face room-wall-side' }, [wallSideLayer]);
   const wallBackFace = el('div', { class: 'room-face room-wall-back' }, [wallBackLayer]);
   const floorFace = el('div', { class: 'room-face room-floor' });
   const floorSprites = el('div', { class: 'room-floor-sprites' });
-  roomEl.append(floorFace, floorSprites, wallSideFace, wallBackFace);
+  roomEl.append(floorFace, wallSideFace, wallBackFace, floorSprites);
 
   const layers = { 'wall-side': wallSideLayer, 'wall-back': wallBackLayer };
 
@@ -358,6 +359,24 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
     });
   }
 
+  // Measures a hotspot's REAL rendered screen position rather than trusting
+  // its stored logical x/y, and converts that into a floor world-coordinate
+  // via screenToWorld (the same inverse used for click-to-move). Fixes two
+  // distinct problems: (1) wall-side hotspots (x < ROOM_CORNER) store x as
+  // depth-along-the-wall, not left-right position, so the old approach
+  // walked the player toward the wrong axis; (2) declutter() mutates a
+  // hotspot's rendered `left` style without updating its stored x/y, so
+  // walkTo() was also walking to stale pre-declutter coordinates. Measuring
+  // the actual DOM position sidesteps both, uniformly across every plane.
+  function hotspotFloorTarget(btn) {
+    const roomRect = roomEl.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    if (roomRect.width === 0 || roomRect.height === 0) return null;
+    const screenX = ((btnRect.left + btnRect.width / 2 - roomRect.left) / roomRect.width) * 100;
+    const screenY = ((btnRect.bottom - roomRect.top) / roomRect.height) * 100;
+    return screenToWorld(screenX, screenY);
+  }
+
   // Walks the player sprite to hotspot `id`'s position and marks it the
   // active hotspot (highlight ring, getActive()). Called by every sector's
   // click handlers before acting on an object.
@@ -369,7 +388,8 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
     activeId = id;
     if (prevActive) hotspots.get(prevActive)?.btn.classList.remove('room-hotspot--active');
     spot.btn.classList.add('room-hotspot--active');
-    return walkToXY(spot.x, spot.y);
+    const target = hotspotFloorTarget(spot.btn) || { x: spot.x, y: spot.y };
+    return walkToXY(target.x, target.y);
   }
 
   // Walks the player to an arbitrary point (percentage coordinates) with
@@ -454,7 +474,16 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
       // cycle (contrast the tank/door case in level3.js, which stayed at
       // literally the same overlap% from 60 through 600 passes and needed
       // an actual placement fix instead, precisely because it wasn't this
-      // kind of case).
+      // kind of case). Level4's room1 poster-row/closet-door adjacency
+      // looked like a third case worth raising this for, but wasn't:
+      // bumping to 300 didn't reproduce the closet/poster overlap in 20
+      // samples, a wider 100-sample run at 120 (this value) also showed 0
+      // hits, and 300 passes surfaced a *different* overlapping pair (two
+      // posters) instead of resolving the room — the failure moves around
+      // rather than shrinking, which is the overcrowding signature, not
+      // slow convergence. Fixed by narrowing room1's poster scatter band
+      // in level4.js instead (see its own comment); this constant didn't
+      // need to change for it.
       const MAX_PASSES = 120;
       // Fraction of each pass's computed correction to actually apply. Any
       // item squeezed between two neighbors on opposite sides (three floor

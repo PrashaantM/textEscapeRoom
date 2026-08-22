@@ -750,7 +750,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
 }
 /* Wall hotspots sit flush against their (rotated) plane, center-anchored —
    floor hotspots use the depth-scale transform defined above instead. */
-.room-hotspot--wall { transform: translate(-50%, -50%); }
+.room-hotspot--wall { transform: translate(-50%, -50%); z-index: 2; }
 .room-hotspot canvas { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent, #39ff14) 30%, transparent)); }
 .room-hotspot:hover, .room-hotspot:focus-visible { border-color: var(--accent, #39ff14); background: color-mix(in srgb, var(--accent, #39ff14) 10%, transparent); }
 .room-hotspot--active { border-color: var(--accent, #39ff14); }
@@ -787,6 +787,7 @@ body.konami-pulse #app { animation: rainbowPulse 1.5s ease; }
   min-width: 9rem;
   box-shadow: 0 0 16px rgba(0, 0, 0, 0.5);
 }
+.room-bubble[hidden] { display: none; }
 .room-bubble::after {
   content: '';
   position: absolute;
