@@ -442,13 +442,24 @@ export default {
       });
     }
 
-    // ---- Room 1: file storage — 30 cabinets + 7 paper piles + 3 cubicles
+    // ---- Room 1: file storage — 10 cabinets + 7 paper piles + 3 cubicles
     // + 9 posters (one hides the clue) + a closet door; 20 clickable
     // things total (7 + 3 + 9 + 1). ----
     function renderRoom1(entry) {
       room.clearHotspots();
       if (entry) room.placeAt(50, 92);
-      const cabinets = scatter(30, { xMin: 4, xMax: 96, yMin: 4, yMax: 16, cols: 10 });
+      // Was 30 cabinets across 3 rows (cols: 10, yMax: 16 — a 12-world-y
+      // band). roomKit.js's declutter() only ever nudges left/right, so it
+      // had no way to separate rows stacked that close together in Y —
+      // auditOverlaps() showed dozens of pairs still overlapping up to 80%
+      // regardless of pass count or damping, confirming this was genuine
+      // overcrowding (too many props hand-placed too close for the
+      // available space), not a declutter convergence bug. A single row of
+      // 10 (verified clean across 6 repeated mounts, since scatter() jitters
+      // positions with Math.random() each time) trades some background
+      // density for cabinets that are actually distinguishable from each
+      // other instead of a wall of overlapping sprites.
+      const cabinets = scatter(10, { xMin: 4, xMax: 96, yMin: 4, yMax: 12, cols: 10 });
       room.setDecor(cabinets.map((p) => ({ ...p, node: drawCabinet('#00ff9c', 6, undefined, randInt(2, 3)) })));
 
       const paperSpots = scatter(7, { xMin: 8, xMax: 92, yMin: 20, yMax: 32, cols: 7 });

@@ -287,16 +287,26 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
     if (prev) { prev.btn.remove(); hotspots.delete(id); }
   }
 
-  // Removes every hotspot at once. Called by scenes with more than one
-  // room (e.g. level2.js's tech/bio bays) before rebuilding the next
-  // room's hotspots — otherwise a hotspot whose id isn't reused by the new
-  // room (most of them, room to room) would be left behind: invisible,
-  // but still sitting at its old position and still clickable, silently
-  // stealing clicks from whatever new hotspot happens to land on top of it.
+  // Removes every hotspot at once, and every decor item with it. Called by
+  // scenes with more than one room (e.g. level2.js's tech/bio bays) before
+  // rebuilding the next room's hotspots — otherwise a hotspot whose id
+  // isn't reused by the new room (most of them, room to room) would be
+  // left behind: invisible, but still sitting at its old position and
+  // still clickable, silently stealing clicks from whatever new hotspot
+  // happens to land on top of it. Decor gets the same treatment for the
+  // same reason, just visual instead of click-stealing: setDecor() is
+  // only ever called by the *some* rooms in a multi-room scene (e.g.
+  // level4.js's rooms 1 and 2, not 3 or 4), so without this a room with no
+  // decor of its own would silently keep showing whichever earlier room's
+  // decor happened to be on screen last — confirmed via Playwright, this
+  // was exactly why Sector 3's electrical room (room3) kept auditing as
+  // "overlapping a Locker": it was actually still rendering room1's
+  // cabinets, 10 of them, that were never cleared on the way out.
   function clearHotspots() {
     hotspots.forEach(({ btn }) => btn.remove());
     hotspots.clear();
     activeId = null;
+    [...roomEl.querySelectorAll('.room-decor-item')].forEach((n) => n.remove());
   }
 
   // Shared walk animation: interpolates the player to world (x, y) —
@@ -431,7 +441,21 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
       if (items.length < 2) return;
 
       const PAD = 6; // px of screen-space breathing room to leave between boxes
-      const MAX_PASSES = 20;
+      // TOLERANCE_FRAC matches auditOverlaps()'s own default exactly, on
+      // purpose: "converged" here needs to mean the same thing as "passes
+      // the audit" there, or this loop could exit early on a metric that
+      // doesn't actually correspond to what gets checked afterward.
+      const TOLERANCE_FRAC = 0.1;
+      // Hard cap only — the real exit is the convergence check below.
+      // Measured, not guessed: Sector 0's most stubborn 3-way squeeze (a
+      // locker sandwiched between two neighbors, force-pushed by both) was
+      // still above TOLERANCE_FRAC at 60 passes, converged cleanly by 120,
+      // and held there through 300 — genuine slow convergence, not a stuck
+      // cycle (contrast the tank/door case in level3.js, which stayed at
+      // literally the same overlap% from 60 through 600 passes and needed
+      // an actual placement fix instead, precisely because it wasn't this
+      // kind of case).
+      const MAX_PASSES = 120;
       // Fraction of each pass's computed correction to actually apply. Any
       // item squeezed between two neighbors on opposite sides (three floor
       // props in a row is common set dressing) gets pushed toward each one
@@ -449,23 +473,55 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
         const deltaPct = (pushPx / item.localWidth) * 100;
         item.node.style.left = `${Math.max(2, Math.min(98, current + deltaPct))}%`;
       };
+      let lastUnresolved = [];
       for (let pass = 0; pass < MAX_PASSES; pass++) {
-        let movedAny = false;
         const rects = items.map((it) => it.node.getBoundingClientRect());
+        // worstFrac is measured against the *actual* overlap (no PAD) —
+        // the same geometry auditOverlaps() checks — while the push below
+        // still triggers PAD early, so a room can keep tightening its
+        // margin even after every pair is already under TOLERANCE_FRAC.
+        // Tracking this per pass (instead of trusting a fixed pass count
+        // to have been "enough") is what catches a room that's still
+        // genuinely overlapping when the loop runs out, rather than
+        // silently shipping it — see the unresolved-pairs warning below.
+        let worstFrac = 0;
+        const unresolved = [];
         for (let i = 0; i < items.length; i++) {
           for (let j = i + 1; j < items.length; j++) {
             const a = rects[i]; const b = rects[j];
             const overlapX = Math.min(a.right, b.right) - Math.max(a.left, b.left);
             const overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+            if (overlapX > 0 && overlapY > 0) {
+              const smallerArea = Math.min(a.width * a.height, b.width * b.height);
+              const frac = smallerArea > 0 ? (overlapX * overlapY) / smallerArea : 0;
+              if (frac > worstFrac) worstFrac = frac;
+              if (frac > TOLERANCE_FRAC) {
+                unresolved.push({
+                  a: items[i].node.getAttribute('aria-label') || items[i].node.className,
+                  b: items[j].node.getAttribute('aria-label') || items[j].node.className,
+                  pct: Math.round(frac * 100),
+                });
+              }
+            }
             if (overlapX + PAD <= 0 || overlapY + PAD <= 0) continue;
             const push = ((overlapX + PAD) / 2) * RELAXATION;
             const dir = (a.left + a.width / 2) <= (b.left + b.width / 2) ? -1 : 1;
             nudge(items[i], dir * push);
             nudge(items[j], -dir * push);
-            movedAny = true;
           }
         }
-        if (!movedAny) break;
+        lastUnresolved = unresolved;
+        if (worstFrac <= TOLERANCE_FRAC) break; // every pair is at or under the audit's own bar
+      }
+      if (lastUnresolved.length > 0) {
+        // Deliberately not silent: a room that hits MAX_PASSES still
+        // overlapping is either a harder convergence case than this loop
+        // budget covers, or genuine overcrowding (too many props hand-
+        // placed too close for the available space, e.g. rows stacked
+        // closer together in Y than X-only nudging can ever compensate
+        // for) — either way that's a real, visible signal, not something
+        // to ship quietly.
+        console.warn(`[roomKit declutter] ${lastUnresolved.length} pair(s) still overlap past ${Math.round(TOLERANCE_FRAC * 100)}% after ${MAX_PASSES} passes: ${JSON.stringify(lastUnresolved)}`);
       }
     });
   }
@@ -473,6 +529,31 @@ export function createRoom({ accent = '#39ff14', ariaLabel = 'Room' } = {}) {
   return {
     el: roomEl, setDecor, setHotspot, removeHotspot, clearHotspots, walkTo, walkToPoint, placeAt, showBubble, hideBubble, getActive, isWalking, declutter,
   };
+}
+
+// Measures every decor/hotspot's real rendered rect and returns any pair
+// whose boxes actually intersect by more than toleranceFrac of the
+// smaller box's area. This is a stricter, different check than an
+// elementFromPoint center-hit test — a pair can pass that test (neither
+// center covered) while still failing this one (meaningful visual
+// overlap). Both checks matter; only this one catches partial overlap.
+export function auditOverlaps(roomEl, { toleranceFrac = 0.1 } = {}) {
+  const items = [...roomEl.querySelectorAll('.room-decor-item, .room-hotspot')];
+  const rects = items.map((n) => ({ node: n, label: n.getAttribute('aria-label') || '?', rect: n.getBoundingClientRect() }));
+  const hits = [];
+  for (let i = 0; i < rects.length; i++) {
+    for (let j = i + 1; j < rects.length; j++) {
+      const a = rects[i].rect; const b = rects[j].rect;
+      const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (ox <= 0 || oy <= 0) continue;
+      const overlapArea = ox * oy;
+      const smallerArea = Math.min(a.width * a.height, b.width * b.height);
+      const frac = overlapArea / smallerArea;
+      if (frac > toleranceFrac) hits.push({ a: rects[i].label, b: rects[j].label, frac: Math.round(frac * 100) });
+    }
+  }
+  return hits;
 }
 
 // Renders a visual inventory overlay: each item shown as its own sprite +
